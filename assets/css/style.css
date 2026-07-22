@@ -639,6 +639,24 @@ table.log-table {
   color: #c0392b;
 }
 
+.badge.exam {
+  background: #fdecc8;
+  color: #9a6a00;
+}
+
+.badge.ceremony {
+  background: #f3e3fb;
+  color: #7a2f9e;
+}
+
+.log-table tbody tr.is-exam {
+  background: #fffaf0;
+}
+
+.log-table tbody tr.is-ceremony {
+  background: #fbf4fd;
+}
+
 /* ---------------- Grade breakdown ---------------- */
 .grade-row {
   display: flex;

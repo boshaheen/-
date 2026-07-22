@@ -203,24 +203,14 @@
 
     renderStats(student);
     renderLog(student);
-    renderWeeklyAchievement(student);
     renderGrade(student);
     renderPhoto(student);
   }
 
-  function renderWeeklyAchievement(student) {
-    const body = document.getElementById("weekly-body");
-    const weeks = student.weeklyAchievement || [];
-    body.innerHTML = weeks
-      .map(
-        (w) => `<tr>
-          <td data-label="الأسبوع"><strong>${w.week}</strong></td>
-          <td data-label="الحفظ">${w.hifz || "—"}</td>
-          <td data-label="المراجعة">${w.murajaa || "—"}</td>
-        </tr>`
-      )
-      .join("");
-  }
+  const SPECIAL_DAYS = {
+    "2026-07-22": { rowClass: "is-exam", badgeClass: "exam", label: "📝 يوم الاختبار النهائي" },
+    "2026-07-23": { rowClass: "is-ceremony", badgeClass: "ceremony", label: "🎉 الحفل الختامي" },
+  };
 
   function renderStats(student) {
     const today = todayIso();
@@ -259,8 +249,12 @@
         let rowClass = "";
         let hifzCell;
         let murajaaCell;
+        const special = SPECIAL_DAYS[entry.date];
 
-        if (entry.holiday) {
+        if (special) {
+          rowClass = special.rowClass;
+          hifzCell = murajaaCell = `<span class="badge ${special.badgeClass}">${special.label}</span>`;
+        } else if (entry.holiday) {
           rowClass = "is-holiday";
           hifzCell = murajaaCell = '<span class="badge holiday">إجازة</span>';
         } else if (entry.date > today) {

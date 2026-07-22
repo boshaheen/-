@@ -651,6 +651,24 @@ table.log-table {
   color: #c0392b;
 }
 
+.badge.exam {
+  background: #fdecc8;
+  color: #9a6a00;
+}
+
+.badge.ceremony {
+  background: #f3e3fb;
+  color: #7a2f9e;
+}
+
+.log-table tbody tr.is-exam {
+  background: #fffaf0;
+}
+
+.log-table tbody tr.is-ceremony {
+  background: #fbf4fd;
+}
+
 /* ---------------- Grade breakdown ---------------- */
 .grade-row {
   display: flex;
@@ -1034,20 +1052,6 @@ table.log-table {
             </tr>
           </thead>
           <tbody id="log-body"></tbody>
-        </table>
-      </div>
-
-      <div class="section-title"><span class="dot"></span> ملخص الإنجاز الأسبوعي</div>
-      <div class="log-table-wrap">
-        <table class="log-table">
-          <thead>
-            <tr>
-              <th>الأسبوع</th>
-              <th>الحفظ</th>
-              <th>المراجعة</th>
-            </tr>
-          </thead>
-          <tbody id="weekly-body"></tbody>
         </table>
       </div>
 
@@ -18931,24 +18935,14 @@ table.log-table {
 
     renderStats(student);
     renderLog(student);
-    renderWeeklyAchievement(student);
     renderGrade(student);
     renderPhoto(student);
   }
 
-  function renderWeeklyAchievement(student) {
-    const body = document.getElementById("weekly-body");
-    const weeks = student.weeklyAchievement || [];
-    body.innerHTML = weeks
-      .map(
-        (w) => `<tr>
-          <td data-label="الأسبوع"><strong>${w.week}</strong></td>
-          <td data-label="الحفظ">${w.hifz || "—"}</td>
-          <td data-label="المراجعة">${w.murajaa || "—"}</td>
-        </tr>`
-      )
-      .join("");
-  }
+  const SPECIAL_DAYS = {
+    "2026-07-22": { rowClass: "is-exam", badgeClass: "exam", label: "📝 يوم الاختبار النهائي" },
+    "2026-07-23": { rowClass: "is-ceremony", badgeClass: "ceremony", label: "🎉 الحفل الختامي" },
+  };
 
   function renderStats(student) {
     const today = todayIso();
@@ -18987,8 +18981,12 @@ table.log-table {
         let rowClass = "";
         let hifzCell;
         let murajaaCell;
+        const special = SPECIAL_DAYS[entry.date];
 
-        if (entry.holiday) {
+        if (special) {
+          rowClass = special.rowClass;
+          hifzCell = murajaaCell = `<span class="badge ${special.badgeClass}">${special.label}</span>`;
+        } else if (entry.holiday) {
           rowClass = "is-holiday";
           hifzCell = murajaaCell = '<span class="badge holiday">إجازة</span>';
         } else if (entry.date > today) {

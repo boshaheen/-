@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>حلقات الحلة لتحفيظ القرآن الكريم | بوابة الطالب</title>
+<meta name="description" content="بوابة متابعة إنجاز الطلاب - حلقات الحلة لتحفيظ القرآن الكريم" />
+<link rel="icon" type="image/png" href="assets/img/favicon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+
+<!-- ===================== Splash Screen ===================== -->
+<section id="splash-screen" class="screen active" aria-label="شاشة البداية">
+  <div class="ribbon-glow"></div>
+  <div class="splash-content">
+    <img src="assets/img/logo-icon.png" alt="شعار حلقات الحلة" class="splash-logo" />
+    <h1 class="splash-title">حلقات الحُلّة</h1>
+    <p class="splash-subtitle">لتحفيظ القرآن الكريم</p>
+    <div class="splash-loader"><span></span></div>
+  </div>
+  <button class="splash-skip" id="skip-splash" type="button">تخطي ⟵</button>
+</section>
+
+<!-- ===================== Login Screen ===================== -->
+<section id="login-screen" class="screen" aria-label="تسجيل الدخول">
+  <div class="page-wrap">
+    <div class="login-card">
+      <img src="assets/img/logo-icon.png" alt="شعار حلقات الحلة" class="logo-icon" />
+      <h1>بوابة إنجاز الطالب</h1>
+      <p class="hint">الرجاء إدخال رقم هاتف ولي أمر الطالب (المسجل في الدورة) لعرض متابعة الحفظ والمراجعة</p>
+
+      <form id="login-form" autocomplete="off">
+        <div class="field">
+          <label for="phone-number">رقم الهاتف</label>
+          <input
+            type="text"
+            id="phone-number"
+            name="phone-number"
+            inputmode="numeric"
+            placeholder="مثال: 69941620"
+            maxlength="8"
+            required
+          />
+        </div>
+        <div class="form-error" id="login-error"></div>
+        <button type="submit" class="btn btn-primary" id="login-btn">دخول</button>
+      </form>
+
+      <div class="example-note">
+        للتجربة استخدم رقم هاتف الطالب <b>شاهين محمد الغانم</b>: <b dir="ltr">69941620</b>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== Student Picker Screen ===================== -->
+<section id="picker-screen" class="screen" aria-label="اختيار الطالب">
+  <div class="page-wrap">
+    <div class="login-card">
+      <img src="assets/img/logo-icon.png" alt="شعار حلقات الحلة" class="logo-icon" />
+      <h1>اختر الطالب</h1>
+      <p class="hint">هذا الرقم مسجل لأكثر من طالب، الرجاء اختيار الطالب لعرض إنجازه</p>
+      <div class="picker-list" id="picker-list"></div>
+      <button class="btn btn-ghost" id="picker-back-btn" type="button" style="width:100%; margin-top:14px;">رجوع</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== Dashboard Screen ===================== -->
+<section id="dashboard-screen" class="screen" aria-label="صفحة إنجاز الطالب">
+  <div class="page-wrap">
+    <header class="top-bar">
+      <div class="brand">
+        <img src="assets/img/logo-icon.png" alt="شعار حلقات الحلة" />
+        <div class="brand-text">
+          <strong>حلقات الحُلّة</strong>
+          <span>لتحفيظ القرآن الكريم</span>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-ghost" id="switch-student-btn" type="button" style="display:none;">تبديل الطالب</button>
+        <button class="btn btn-ghost" id="logout-btn" type="button">تسجيل خروج</button>
+      </div>
+    </header>
+
+    <main class="dash-main">
+      <div class="student-hero">
+        <div>
+          <h2 id="student-name">—</h2>
+          <p id="student-program">—</p>
+          <div class="meta-chips">
+            <span class="chip" id="student-teacher">—</span>
+            <span class="chip" id="student-level">—</span>
+            <span class="chip" id="student-period">—</span>
+            <span class="chip" id="student-status" style="display:none;"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-title"><span class="dot"></span> ملخص الإنجاز</div>
+      <div class="cards-grid" id="stats-grid"></div>
+
+      <div class="section-title"><span class="dot"></span> سجل الحفظ والمراجعة اليومي</div>
+      <div class="log-table-wrap">
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>اليوم</th>
+              <th>التاريخ</th>
+              <th>الحضور</th>
+              <th>الحفظ</th>
+              <th>المراجعة</th>
+            </tr>
+          </thead>
+          <tbody id="log-body"></tbody>
+        </table>
+      </div>
+
+      <div class="section-title"><span class="dot"></span> ملخص الإنجاز الأسبوعي</div>
+      <div class="log-table-wrap">
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>الأسبوع</th>
+              <th>الحفظ</th>
+              <th>المراجعة</th>
+            </tr>
+          </thead>
+          <tbody id="weekly-body"></tbody>
+        </table>
+      </div>
+
+      <div class="two-col" style="margin-top: 36px;">
+        <div class="info-card">
+          <h3>📄 الدرجة النهائية</h3>
+          <div id="grade-box"></div>
+        </div>
+
+        <div class="info-card">
+          <h3>📷 الصورة الجماعية للحلقة</h3>
+          <div id="photo-card-wrap"></div>
+        </div>
+      </div>
+
+      <p class="footer-note">© حلقات الحُلّة لتحفيظ القرآن الكريم — بوابة متابعة إنجاز الطلاب</p>
+    </main>
+  </div>
+</section>
+
+<!-- ===================== Media Modal ===================== -->
+<div class="modal-overlay" id="media-modal">
+  <div class="modal-box" id="modal-box"></div>
+</div>
+
+<script src="assets/js/script.js"></script>
+</body>
+</html>

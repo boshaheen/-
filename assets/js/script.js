@@ -294,24 +294,27 @@
       .map((p) => {
         const item = g[p.key] || { score: null, max: 0 };
         totalMax += item.max || 0;
+        const scopeNote = item.scope ? `<div class="grade-scope">${item.scope}</div>` : "";
+        const noteNote = item.note ? `<div class="grade-scope">ℹ️ ${item.note}</div>` : "";
+
         if (item.score === null || item.score === undefined) {
           allGraded = false;
-          return `<div class="grade-row">
-            <span class="grade-label">${p.icon} ${p.label} <small>(من ${item.max})</small></span>
-            <span class="grade-value pending">قيد الانتظار</span>
+          return `<div class="grade-row-wrap">
+            <div class="grade-row">
+              <span class="grade-label">${p.icon} ${p.label} <small>(من ${item.max})</small></span>
+              <span class="grade-value pending">قيد الانتظار</span>
+            </div>
+            ${scopeNote}${noteNote}
           </div>`;
         }
         const scoreRounded = Math.round(item.score * 100) / 100;
         total = Math.round((total + scoreRounded) * 100) / 100;
-        const scopeNote = item.scope
-          ? `<div class="grade-scope">${item.scope}</div>`
-          : "";
         return `<div class="grade-row-wrap">
           <div class="grade-row">
             <span class="grade-label">${p.icon} ${p.label} <small>(من ${item.max})</small></span>
             <span class="grade-value">${scoreRounded}</span>
           </div>
-          ${scopeNote}
+          ${scopeNote}${noteNote}
         </div>`;
       })
       .join("");

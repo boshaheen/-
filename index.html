@@ -31,18 +31,18 @@
     <div class="login-card">
       <img src="assets/img/logo-icon.png" alt="شعار حلقات الحلة" class="logo-icon" />
       <h1>بوابة إنجاز الطالب</h1>
-      <p class="hint">الرجاء إدخال الرقم المدني للطالب لعرض متابعة الحفظ والمراجعة</p>
+      <p class="hint">الرجاء إدخال رقم هاتف ولي أمر الطالب (المسجل في الدورة) لعرض متابعة الحفظ والمراجعة</p>
 
       <form id="login-form" autocomplete="off">
         <div class="field">
-          <label for="civil-id">الرقم المدني</label>
+          <label for="phone-number">رقم الهاتف</label>
           <input
             type="text"
-            id="civil-id"
-            name="civil-id"
+            id="phone-number"
+            name="phone-number"
             inputmode="numeric"
-            placeholder="مثال: 311053100847"
-            maxlength="12"
+            placeholder="مثال: 69941620"
+            maxlength="8"
             required
           />
         </div>
@@ -51,7 +51,7 @@
       </form>
 
       <div class="example-note">
-        للتجربة استخدم الرقم المدني للطالب <b>شاهين محمد الغانم</b>: <b dir="ltr">311053100847</b>
+        للتجربة استخدم رقم هاتف الطالب <b>شاهين محمد الغانم</b>: <b dir="ltr">69941620</b>
       </div>
     </div>
   </div>
@@ -94,6 +94,7 @@
             <tr>
               <th>اليوم</th>
               <th>التاريخ</th>
+              <th>الحضور</th>
               <th>الحفظ</th>
               <th>المراجعة</th>
             </tr>
@@ -104,13 +105,13 @@
 
       <div class="two-col" style="margin-top: 36px;">
         <div class="info-card">
-          <h3>📄 الدرجة النهائية للاختبار</h3>
-          <div class="pending-box" id="grade-box"></div>
+          <h3>📄 الدرجة النهائية</h3>
+          <div id="grade-box"></div>
         </div>
 
         <div class="info-card">
-          <h3>🎬 فيديو الطالب</h3>
-          <div id="video-card-wrap"></div>
+          <h3>📷 الصورة الجماعية للحلقة</h3>
+          <div id="photo-card-wrap"></div>
         </div>
       </div>
 
@@ -119,8 +120,8 @@
   </div>
 </section>
 
-<!-- ===================== Video Modal ===================== -->
-<div class="modal-overlay" id="video-modal">
+<!-- ===================== Media Modal ===================== -->
+<div class="modal-overlay" id="media-modal">
   <div class="modal-box" id="modal-box"></div>
 </div>
 

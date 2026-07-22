@@ -214,9 +214,9 @@
     body.innerHTML = weeks
       .map(
         (w) => `<tr>
-          <td><strong>${w.week}</strong></td>
-          <td>${w.hifz || "—"}</td>
-          <td>${w.murajaa || "—"}</td>
+          <td data-label="الأسبوع"><strong>${w.week}</strong></td>
+          <td data-label="الحفظ">${w.hifz || "—"}</td>
+          <td data-label="المراجعة">${w.murajaa || "—"}</td>
         </tr>`
       )
       .join("");
@@ -276,11 +276,11 @@
         if (entry.date === today) rowClass += " is-today";
 
         return `<tr class="${rowClass.trim()}">
-          <td>${entry.day}</td>
-          <td>${formatArabicDate(entry.date)}</td>
-          <td>${attendanceCell(entry, today)}</td>
-          <td>${hifzCell}</td>
-          <td>${murajaaCell}</td>
+          <td data-label="اليوم">${entry.day}</td>
+          <td data-label="التاريخ">${formatArabicDate(entry.date)}</td>
+          <td data-label="الحضور">${attendanceCell(entry, today)}</td>
+          <td data-label="الحفظ">${hifzCell}</td>
+          <td data-label="المراجعة">${murajaaCell}</td>
         </tr>`;
       })
       .join("");

@@ -411,22 +411,6 @@ body {
   font-size: 18px;
 }
 
-.example-note {
-  margin-top: 22px;
-  font-size: 12px;
-  color: var(--ink-soft);
-  background: var(--teal-100);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  line-height: 1.8;
-}
-
-.example-note b {
-  color: var(--teal-800);
-  direction: ltr;
-  display: inline-block;
-}
-
 /* ---------------- Dashboard ---------------- */
 #dashboard-screen .page-wrap {
   background: var(--cream);
@@ -575,6 +559,66 @@ table.log-table {
 
 .log-table tbody tr.is-today {
   background: var(--salmon-light);
+}
+
+/* ---- Responsive: stack table rows into cards on narrow screens ---- */
+@media (max-width: 640px) {
+  .log-table-wrap {
+    background: transparent;
+    box-shadow: none;
+    border: none;
+    overflow: visible;
+  }
+
+  table.log-table,
+  .log-table thead,
+  .log-table tbody,
+  .log-table tr,
+  .log-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .log-table thead {
+    position: absolute;
+    inset-inline-start: -9999px;
+  }
+
+  .log-table tbody tr {
+    background: var(--white);
+    border: 1px solid #eef3f3;
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 18px -14px rgba(0, 55, 69, 0.25);
+    padding: 6px 14px;
+    margin-bottom: 12px;
+  }
+
+  .log-table tbody tr.is-today {
+    border-color: var(--salmon);
+  }
+
+  .log-table tbody td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 9px 0;
+    border-top: 1px solid #f3f6f6;
+    text-align: end;
+  }
+
+  .log-table tbody td:first-child {
+    border-top: none;
+  }
+
+  .log-table tbody td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--teal-800);
+    text-align: start;
+  }
 }
 
 .badge {
@@ -918,7 +962,7 @@ table.log-table {
             id="phone-number"
             name="phone-number"
             inputmode="numeric"
-            placeholder="مثال: 69941620"
+            placeholder="أدخل رقم الهاتف"
             maxlength="8"
             required
           />
@@ -926,10 +970,6 @@ table.log-table {
         <div class="form-error" id="login-error"></div>
         <button type="submit" class="btn btn-primary" id="login-btn">دخول</button>
       </form>
-
-      <div class="example-note">
-        للتجربة استخدم رقم هاتف الطالب <b>شاهين محمد الغانم</b>: <b dir="ltr">69941620</b>
-      </div>
     </div>
   </div>
 </section>
@@ -18902,9 +18942,9 @@ table.log-table {
     body.innerHTML = weeks
       .map(
         (w) => `<tr>
-          <td><strong>${w.week}</strong></td>
-          <td>${w.hifz || "—"}</td>
-          <td>${w.murajaa || "—"}</td>
+          <td data-label="الأسبوع"><strong>${w.week}</strong></td>
+          <td data-label="الحفظ">${w.hifz || "—"}</td>
+          <td data-label="المراجعة">${w.murajaa || "—"}</td>
         </tr>`
       )
       .join("");
@@ -18964,11 +19004,11 @@ table.log-table {
         if (entry.date === today) rowClass += " is-today";
 
         return `<tr class="${rowClass.trim()}">
-          <td>${entry.day}</td>
-          <td>${formatArabicDate(entry.date)}</td>
-          <td>${attendanceCell(entry, today)}</td>
-          <td>${hifzCell}</td>
-          <td>${murajaaCell}</td>
+          <td data-label="اليوم">${entry.day}</td>
+          <td data-label="التاريخ">${formatArabicDate(entry.date)}</td>
+          <td data-label="الحضور">${attendanceCell(entry, today)}</td>
+          <td data-label="الحفظ">${hifzCell}</td>
+          <td data-label="المراجعة">${murajaaCell}</td>
         </tr>`;
       })
       .join("");

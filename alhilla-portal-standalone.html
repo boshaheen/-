@@ -609,6 +609,23 @@ table.log-table {
   color: var(--salmon-dark);
 }
 
+.grade-row-wrap {
+  border-bottom: 1px solid #f0f4f4;
+  padding-bottom: 4px;
+}
+
+.grade-row-wrap .grade-row {
+  border-bottom: none;
+  padding-bottom: 2px;
+}
+
+.grade-scope {
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  line-height: 1.6;
+}
+
 .grade-note {
   margin-top: 12px;
   font-size: 12px;
@@ -897,6 +914,7 @@ table.log-table {
             <span class="chip" id="student-teacher">—</span>
             <span class="chip" id="student-level">—</span>
             <span class="chip" id="student-period">—</span>
+            <span class="chip" id="student-status" style="display:none;"></span>
           </div>
         </div>
       </div>
@@ -917,6 +935,20 @@ table.log-table {
             </tr>
           </thead>
           <tbody id="log-body"></tbody>
+        </table>
+      </div>
+
+      <div class="section-title"><span class="dot"></span> ملخص الإنجاز الأسبوعي</div>
+      <div class="log-table-wrap">
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>الأسبوع</th>
+              <th>الحفظ</th>
+              <th>المراجعة</th>
+            </tr>
+          </thead>
+          <tbody id="weekly-body"></tbody>
         </table>
       </div>
 
@@ -988,11 +1020,12 @@ table.log-table {
     "level": "مُتم لحفظ القرآن الكريم كاملاً (30 جزء)",
     "startDate": "2026-06-28",
     "endDate": "2026-07-23",
+    "lastUpdated": "2026-07-19",
     "groupPhoto": null,
     "grade": {
-      "attendance": { "score": null, "max": 20 },
-      "achievement": { "score": null, "max": 40 },
-      "exam": { "score": null, "max": 40 }
+      "attendance": { "score": 20, "max": 20 },
+      "achievement": { "score": 40, "max": 40 },
+      "exam": { "score": 40, "max": 40, "scope": "من سورة الفاتحة إلى سورة الناس (اختبار كامل القرآن الكريم)" }
     },
     "weeklyAchievement": [
       { "week": "الأسبوع الأول", "hifz": "لا يوجد حفظ جديد (الطالب حافظ لكتاب الله كاملاً)", "murajaa": "من سورة الناس إلى سورة الأحزاب" },
@@ -1012,17 +1045,17 @@ table.log-table {
       { "day": "الإثنين",  "date": "2026-07-06", "attended": true, "hifz": "مراجعة فقط", "murajaa": "من سورة المجادلة - إلى سورة النساء" },
       { "day": "الثلاثاء", "date": "2026-07-07", "attended": true, "hifz": "مراجعة فقط", "murajaa": "من سورة المائدة - إلى سورة الأعراف" },
       { "day": "الأربعاء", "date": "2026-07-08", "attended": true, "hifz": "مراجعة فقط", "murajaa": "من سورة الأنفال - إلى سورة هود" },
-      { "day": "الخميس",   "date": "2026-07-09", "attended": null, "hifz": null, "murajaa": null },
+      { "day": "الخميس",   "date": "2026-07-09", "attended": true, "hifz": "مراجعة فقط", "murajaa": "ضمن مراجعة الأسبوع الثاني (من سورة الناس إلى سورة النمل + من سورة البقرة إلى سورة الكهف)" },
       { "day": "الجمعة",   "date": "2026-07-10", "attended": null, "hifz": null, "murajaa": null, "holiday": true },
       { "day": "السبت",    "date": "2026-07-11", "attended": null, "hifz": null, "murajaa": null, "holiday": true },
-      { "day": "الأحد",    "date": "2026-07-12", "attended": null, "hifz": null, "murajaa": null },
-      { "day": "الإثنين",  "date": "2026-07-13", "attended": null, "hifz": null, "murajaa": null },
-      { "day": "الثلاثاء", "date": "2026-07-14", "attended": null, "hifz": null, "murajaa": null },
-      { "day": "الأربعاء", "date": "2026-07-15", "attended": null, "hifz": null, "murajaa": null },
-      { "day": "الخميس",   "date": "2026-07-16", "attended": null, "hifz": null, "murajaa": null },
+      { "day": "الأحد",    "date": "2026-07-12", "attended": true, "hifz": "مراجعة فقط", "murajaa": "ضمن مراجعة الأسبوع الثالث (من سورة الناس إلى سورة مريم + سورة إبراهيم)" },
+      { "day": "الإثنين",  "date": "2026-07-13", "attended": true, "hifz": "مراجعة فقط", "murajaa": "ضمن مراجعة الأسبوع الثالث" },
+      { "day": "الثلاثاء", "date": "2026-07-14", "attended": true, "hifz": "مراجعة فقط", "murajaa": "ضمن مراجعة الأسبوع الثالث" },
+      { "day": "الأربعاء", "date": "2026-07-15", "attended": true, "hifz": "مراجعة فقط", "murajaa": "ضمن مراجعة الأسبوع الثالث" },
+      { "day": "الخميس",   "date": "2026-07-16", "attended": true, "hifz": "مراجعة فقط", "murajaa": "ضمن مراجعة الأسبوع الثالث" },
       { "day": "الجمعة",   "date": "2026-07-17", "attended": null, "hifz": null, "murajaa": null, "holiday": true },
       { "day": "السبت",    "date": "2026-07-18", "attended": null, "hifz": null, "murajaa": null, "holiday": true },
-      { "day": "الأحد",    "date": "2026-07-19", "attended": null, "hifz": null, "murajaa": null },
+      { "day": "الأحد",    "date": "2026-07-19", "attended": true, "hifz": "مراجعة شاملة", "murajaa": "مراجعة نهائية من سورة الفاتحة إلى سورة الناس" },
       { "day": "الإثنين",  "date": "2026-07-20", "attended": null, "hifz": null, "murajaa": null },
       { "day": "الثلاثاء", "date": "2026-07-21", "attended": null, "hifz": null, "murajaa": null },
       { "day": "الأربعاء", "date": "2026-07-22", "attended": null, "hifz": null, "murajaa": null },
@@ -1140,10 +1173,37 @@ table.log-table {
     document.getElementById("student-period").textContent =
       "🗓️ " + formatArabicDate(student.startDate) + " — " + formatArabicDate(student.endDate);
 
+    const g = student.grade || {};
+    const isComplete = ["attendance", "achievement", "exam"].every(
+      (k) => g[k] && g[k].score !== null && g[k].score !== undefined
+    );
+    const statusChip = document.getElementById("student-status");
+    if (isComplete) {
+      statusChip.style.display = "";
+      statusChip.textContent = "✅ اكتملت الدورة والدرجة النهائية";
+    } else {
+      statusChip.style.display = "none";
+    }
+
     renderStats(student);
     renderLog(student);
+    renderWeeklyAchievement(student);
     renderGrade(student);
     renderPhoto(student);
+  }
+
+  function renderWeeklyAchievement(student) {
+    const body = document.getElementById("weekly-body");
+    const weeks = student.weeklyAchievement || [];
+    body.innerHTML = weeks
+      .map(
+        (w) => `<tr>
+          <td><strong>${w.week}</strong></td>
+          <td>${w.hifz || "—"}</td>
+          <td>${w.murajaa || "—"}</td>
+        </tr>`
+      )
+      .join("");
   }
 
   function renderStats(student) {
@@ -1235,9 +1295,15 @@ table.log-table {
           </div>`;
         }
         total += item.score;
-        return `<div class="grade-row">
-          <span class="grade-label">${p.icon} ${p.label} <small>(من ${item.max})</small></span>
-          <span class="grade-value">${item.score}</span>
+        const scopeNote = item.scope
+          ? `<div class="grade-scope">${item.scope}</div>`
+          : "";
+        return `<div class="grade-row-wrap">
+          <div class="grade-row">
+            <span class="grade-label">${p.icon} ${p.label} <small>(من ${item.max})</small></span>
+            <span class="grade-value">${item.score}</span>
+          </div>
+          ${scopeNote}
         </div>`;
       })
       .join("");

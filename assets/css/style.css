@@ -597,6 +597,23 @@ table.log-table {
   color: var(--salmon-dark);
 }
 
+.grade-row-wrap {
+  border-bottom: 1px solid #f0f4f4;
+  padding-bottom: 4px;
+}
+
+.grade-row-wrap .grade-row {
+  border-bottom: none;
+  padding-bottom: 2px;
+}
+
+.grade-scope {
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  line-height: 1.6;
+}
+
 .grade-note {
   margin-top: 12px;
   font-size: 12px;

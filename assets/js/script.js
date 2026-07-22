@@ -145,10 +145,37 @@
     document.getElementById("student-period").textContent =
       "🗓️ " + formatArabicDate(student.startDate) + " — " + formatArabicDate(student.endDate);
 
+    const g = student.grade || {};
+    const isComplete = ["attendance", "achievement", "exam"].every(
+      (k) => g[k] && g[k].score !== null && g[k].score !== undefined
+    );
+    const statusChip = document.getElementById("student-status");
+    if (isComplete) {
+      statusChip.style.display = "";
+      statusChip.textContent = "✅ اكتملت الدورة والدرجة النهائية";
+    } else {
+      statusChip.style.display = "none";
+    }
+
     renderStats(student);
     renderLog(student);
+    renderWeeklyAchievement(student);
     renderGrade(student);
     renderPhoto(student);
+  }
+
+  function renderWeeklyAchievement(student) {
+    const body = document.getElementById("weekly-body");
+    const weeks = student.weeklyAchievement || [];
+    body.innerHTML = weeks
+      .map(
+        (w) => `<tr>
+          <td><strong>${w.week}</strong></td>
+          <td>${w.hifz || "—"}</td>
+          <td>${w.murajaa || "—"}</td>
+        </tr>`
+      )
+      .join("");
   }
 
   function renderStats(student) {
@@ -240,9 +267,15 @@
           </div>`;
         }
         total += item.score;
-        return `<div class="grade-row">
-          <span class="grade-label">${p.icon} ${p.label} <small>(من ${item.max})</small></span>
-          <span class="grade-value">${item.score}</span>
+        const scopeNote = item.scope
+          ? `<div class="grade-scope">${item.scope}</div>`
+          : "";
+        return `<div class="grade-row-wrap">
+          <div class="grade-row">
+            <span class="grade-label">${p.icon} ${p.label} <small>(من ${item.max})</small></span>
+            <span class="grade-value">${item.score}</span>
+          </div>
+          ${scopeNote}
         </div>`;
       })
       .join("");

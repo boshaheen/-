@@ -235,7 +235,6 @@
   }
 
   function attendanceCell(entry, today) {
-    if (entry.holiday) return '<span class="badge holiday">إجازة</span>';
     if (entry.date > today) return '<span class="badge upcoming">قادم</span>';
     if (entry.attended === true) return '<span class="badge present">✓ حاضر</span>';
     if (entry.attended === false) return '<span class="badge absent">✗ غائب</span>';
@@ -245,6 +244,7 @@
   function renderLog(student) {
     const today = todayIso();
     const rows = student.log
+      .filter((entry) => !entry.holiday)
       .map((entry) => {
         let rowClass = "";
         let hifzCell;
@@ -254,9 +254,6 @@
         if (special) {
           rowClass = special.rowClass;
           hifzCell = murajaaCell = `<span class="badge ${special.badgeClass}">${special.label}</span>`;
-        } else if (entry.holiday) {
-          rowClass = "is-holiday";
-          hifzCell = murajaaCell = '<span class="badge holiday">إجازة</span>';
         } else if (entry.date > today) {
           rowClass = "is-upcoming";
           hifzCell = murajaaCell = '<span class="badge upcoming">قادم</span>';

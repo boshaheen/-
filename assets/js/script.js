@@ -4,10 +4,12 @@
   const SPLASH_DURATION_MS = 3200;
   let studentsData = null;
   let currentStudent = null;
+  let currentFamily = null;
 
   const screens = {
     splash: document.getElementById("splash-screen"),
     login: document.getElementById("login-screen"),
+    picker: document.getElementById("picker-screen"),
     dashboard: document.getElementById("dashboard-screen"),
   };
 
@@ -47,7 +49,8 @@
       advanced = true;
       const savedPhone = sessionStorage.getItem("alhilla_phone");
       if (savedPhone) {
-        attemptLogin(savedPhone, { silent: true });
+        const savedIndex = sessionStorage.getItem("alhilla_student_index");
+        attemptLogin(savedPhone, { silent: true, autoIndex: savedIndex });
       } else {
         showScreen("login");
       }
@@ -96,20 +99,33 @@
     try {
       const data = await loadStudents();
       await new Promise((r) => setTimeout(r, opts.silent ? 0 : 450));
-      const student = data[phone];
-      if (!student) {
+      const family = data[phone];
+      if (!family || !family.length) {
         if (!opts.silent) {
           errorBox.textContent = "رقم الهاتف غير صحيح أو غير مسجل في هذه الدورة";
         } else {
           sessionStorage.removeItem("alhilla_phone");
+          sessionStorage.removeItem("alhilla_student_index");
           showScreen("login");
         }
         return;
       }
       sessionStorage.setItem("alhilla_phone", phone);
-      currentStudent = student;
-      renderDashboard(student);
-      showScreen("dashboard");
+      currentFamily = family;
+
+      if (family.length === 1) {
+        selectStudent(0);
+        return;
+      }
+
+      const idx = opts.autoIndex !== undefined && opts.autoIndex !== null ? parseInt(opts.autoIndex, 10) : NaN;
+      if (!Number.isNaN(idx) && family[idx]) {
+        selectStudent(idx);
+        return;
+      }
+
+      renderPicker(family);
+      showScreen("picker");
     } catch (err) {
       console.error(err);
       if (!opts.silent) {
@@ -123,6 +139,34 @@
         btn.textContent = "دخول";
       }
     }
+  }
+
+  function renderPicker(family) {
+    const list = document.getElementById("picker-list");
+    list.innerHTML = family
+      .map(
+        (s, i) => `<div class="picker-item" data-index="${i}">
+          <div>
+            <div class="picker-name">${s.name}</div>
+            <div class="picker-meta">${s.teacher}</div>
+          </div>
+          <span class="arrow">⟵</span>
+        </div>`
+      )
+      .join("");
+    list.querySelectorAll(".picker-item").forEach((el) => {
+      el.addEventListener("click", () => selectStudent(parseInt(el.dataset.index, 10)));
+    });
+  }
+
+  function selectStudent(index) {
+    if (!currentFamily || !currentFamily[index]) return;
+    sessionStorage.setItem("alhilla_student_index", String(index));
+    currentStudent = currentFamily[index];
+    renderDashboard(currentStudent);
+    const switchBtn = document.getElementById("switch-student-btn");
+    switchBtn.style.display = currentFamily.length > 1 ? "" : "none";
+    showScreen("dashboard");
   }
 
   // ---------------- Dashboard ----------------
@@ -191,7 +235,7 @@
       { num: reviewed, lbl: "أيام تمت فيها المراجعة" },
       { num: total - holidays, lbl: "أيام الدورة الفعلية" },
       { num: remaining, lbl: "أيام متبقية" },
-      { num: student.level.includes("30") ? "30" : "—", lbl: "عدد الأجزاء المحفوظة" },
+      { num: student.juzMemorized !== null && student.juzMemorized !== undefined ? student.juzMemorized : "—", lbl: "عدد الأجزاء المحفوظة" },
     ];
 
     const grid = document.getElementById("stats-grid");
@@ -266,14 +310,15 @@
             <span class="grade-value pending">قيد الانتظار</span>
           </div>`;
         }
-        total += item.score;
+        const scoreRounded = Math.round(item.score * 100) / 100;
+        total = Math.round((total + scoreRounded) * 100) / 100;
         const scopeNote = item.scope
           ? `<div class="grade-scope">${item.scope}</div>`
           : "";
         return `<div class="grade-row-wrap">
           <div class="grade-row">
             <span class="grade-label">${p.icon} ${p.label} <small>(من ${item.max})</small></span>
-            <span class="grade-value">${item.score}</span>
+            <span class="grade-value">${scoreRounded}</span>
           </div>
           ${scopeNote}
         </div>`;
@@ -344,7 +389,28 @@
 
   document.getElementById("logout-btn").addEventListener("click", () => {
     sessionStorage.removeItem("alhilla_phone");
+    sessionStorage.removeItem("alhilla_student_index");
     currentStudent = null;
+    currentFamily = null;
+    document.getElementById("phone-number").value = "";
+    document.getElementById("login-error").textContent = "";
+    showScreen("login");
+  });
+
+  document.getElementById("switch-student-btn").addEventListener("click", () => {
+    if (!currentFamily) return;
+    renderPicker(currentFamily);
+    showScreen("picker");
+  });
+
+  document.getElementById("picker-back-btn").addEventListener("click", () => {
+    if (currentStudent) {
+      showScreen("dashboard");
+      return;
+    }
+    sessionStorage.removeItem("alhilla_phone");
+    sessionStorage.removeItem("alhilla_student_index");
+    currentFamily = null;
     document.getElementById("phone-number").value = "";
     document.getElementById("login-error").textContent = "";
     showScreen("login");

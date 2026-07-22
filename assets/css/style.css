@@ -244,7 +244,8 @@ body {
 }
 
 /* ---------------- Login Screen ---------------- */
-#login-screen .page-wrap {
+#login-screen .page-wrap,
+#picker-screen .page-wrap {
   align-items: center;
   justify-content: center;
   background:
@@ -354,6 +355,48 @@ body {
   padding: 15px;
   font-size: 16px;
   margin-top: 6px;
+}
+
+.picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: start;
+}
+
+.picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1.6px solid #dfe9ea;
+  background: #fbfdfd;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.picker-item:hover {
+  border-color: var(--teal-700);
+  background: var(--teal-100);
+}
+
+.picker-item .picker-name {
+  font-weight: 700;
+  color: var(--teal-800);
+  font-size: 14.5px;
+}
+
+.picker-item .picker-meta {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-top: 3px;
+}
+
+.picker-item .arrow {
+  color: var(--salmon-dark);
+  font-size: 18px;
 }
 
 .example-note {

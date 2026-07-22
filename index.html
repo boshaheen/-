@@ -57,6 +57,19 @@
   </div>
 </section>
 
+<!-- ===================== Student Picker Screen ===================== -->
+<section id="picker-screen" class="screen" aria-label="اختيار الطالب">
+  <div class="page-wrap">
+    <div class="login-card">
+      <img src="assets/img/logo-icon.png" alt="شعار حلقات الحلة" class="logo-icon" />
+      <h1>اختر الطالب</h1>
+      <p class="hint">هذا الرقم مسجل لأكثر من طالب، الرجاء اختيار الطالب لعرض إنجازه</p>
+      <div class="picker-list" id="picker-list"></div>
+      <button class="btn btn-ghost" id="picker-back-btn" type="button" style="width:100%; margin-top:14px;">رجوع</button>
+    </div>
+  </div>
+</section>
+
 <!-- ===================== Dashboard Screen ===================== -->
 <section id="dashboard-screen" class="screen" aria-label="صفحة إنجاز الطالب">
   <div class="page-wrap">
@@ -68,7 +81,10 @@
           <span>لتحفيظ القرآن الكريم</span>
         </div>
       </div>
-      <button class="btn btn-ghost" id="logout-btn" type="button">تسجيل خروج</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-ghost" id="switch-student-btn" type="button" style="display:none;">تبديل الطالب</button>
+        <button class="btn btn-ghost" id="logout-btn" type="button">تسجيل خروج</button>
+      </div>
     </header>
 
     <main class="dash-main">

@@ -337,7 +337,6 @@
     if (groupPhoto) {
       wrap.innerHTML = `
         <div class="video-card has-photo" id="open-photo" style="background-image:url('${groupPhoto}')">
-          <div class="play-btn">🔍</div>
           <span class="video-caption">اضغط لعرض الصورة الجماعية</span>
         </div>`;
     } else {

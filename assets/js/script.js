@@ -204,7 +204,7 @@
     renderStats(student);
     renderLog(student);
     renderGrade(student);
-    renderPhoto(student);
+    renderPhoto();
   }
 
   const SPECIAL_DAYS = {
@@ -331,11 +331,12 @@
     document.getElementById("grade-box").innerHTML = rowsHtml + totalHtml + noteHtml;
   }
 
-  function renderPhoto(student) {
+  function renderPhoto() {
     const wrap = document.getElementById("photo-card-wrap");
-    if (student.groupPhoto) {
+    const groupPhoto = (studentsData && studentsData._meta && studentsData._meta.groupPhoto) || null;
+    if (groupPhoto) {
       wrap.innerHTML = `
-        <div class="video-card has-photo" id="open-photo" style="background-image:url('${student.groupPhoto}')">
+        <div class="video-card has-photo" id="open-photo" style="background-image:url('${groupPhoto}')">
           <div class="play-btn">🔍</div>
           <span class="video-caption">اضغط لعرض الصورة الجماعية</span>
         </div>`;
@@ -346,7 +347,7 @@
           <span class="video-caption">سيتم إضافة الصورة الجماعية قريبًا</span>
         </div>`;
     }
-    document.getElementById("open-photo").addEventListener("click", () => openPhotoModal(student.groupPhoto));
+    document.getElementById("open-photo").addEventListener("click", () => openPhotoModal(groupPhoto));
   }
 
   function openPhotoModal(photoUrl) {

@@ -1,9 +1,16 @@
 import Anthropic from '@anthropic-ai/sdk'
+import https from 'node:https'
 import { CAMEL_TRAITS, type AnalyzeResult, type TraitScore } from '../types.js'
 import { gradeFromScore } from './grade.js'
 import { parseImageDataUrl } from './imageData.js'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+// Serverless runtimes (Vercel/Lambda) freeze processes between invocations,
+// which can leave pooled keep-alive sockets stale and cause the next request
+// to fail with "Premature close". Disabling keep-alive avoids reusing them.
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+  httpAgent: new https.Agent({ keepAlive: false }),
+})
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5'
 
 const TOOL_NAME = 'submit_camel_evaluation'

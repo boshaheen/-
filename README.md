@@ -16,7 +16,8 @@
 
 ```
 client/   واجهة React + TypeScript + Tailwind (Vite)
-server/   خادم Express + TypeScript، يتصل بـ Anthropic API و Resend
+server/   خادم Express + TypeScript للتشغيل المحلي، يتصل بـ Anthropic API و Resend
+api/      دوال Vercel Serverless (نفس منطق server/src/lib) للنشر أونلاين على Vercel
 ```
 
 ## المتطلبات
@@ -46,16 +47,35 @@ npm run dev
 
 > ملاحظة: بعض المتصفحات تتطلب **HTTPS** لتفعيل الكاميرا (`getUserMedia`) عند الوصول من جهاز آخر غير `localhost`. عند النشر الفعلي استخدم استضافة تدعم HTTPS تلقائيًا (Vercel/Netlify للواجهة).
 
-## البناء للإنتاج
+## النشر أونلاين (Vercel) — بدون سطر أوامر
+
+المشروع مُجهّز للنشر كمشروع واحد على Vercel (الواجهة + دوال `api/` معًا على نفس النطاق، بدون الحاجة لخادم منفصل):
+
+1. أنشئ حسابًا مجانيًا على https://vercel.com (سجّل الدخول بحساب GitHub مباشرة، الأسهل).
+2. من لوحة Vercel: **Add New → Project**، ثم اربط حساب GitHub وامنح Vercel صلاحية الوصول لمستودع `boshaheen/-` (أو استورده إن كان ظاهرًا في القائمة).
+3. عند شاشة الإعداد:
+   - **Root Directory**: اتركه كما هو (جذر المستودع) — **لا** تغيّره إلى `client`.
+   - Vercel سيقرأ إعدادات البناء تلقائيًا من ملف `vercel.json` الموجود في المشروع.
+4. قبل الضغط على Deploy، افتح قسم **Environment Variables** وأضف:
+   - `ANTHROPIC_API_KEY` = مفتاحك من https://console.anthropic.com
+   - `RESEND_API_KEY` = مفتاحك من https://resend.com (اختياري، لتفعيل الإرسال بالبريد)
+   - `EMAIL_FROM` = `onboarding@resend.dev` (أو بريد نطاقك الموثّق في Resend)
+5. اضغط **Deploy** وانتظر دقيقة تقريبًا. بعد الانتهاء تحصل على رابط عام مثل `https://your-app.vercel.app` يعمل عليه كل شيء — الكاميرا، الرفع، التحليل، التصدير، الإرسال — بدون أي إعداد إضافي (لا CORS ولا متغيرات رابط منفصلة، لأن كل شيء على نفس النطاق).
+
+> لأي تحديث لاحق: فقط ادفع (push) تغييرات جديدة لنفس الفرع على GitHub، وVercel يعيد النشر تلقائيًا.
+
+### بديل: استضافة الواجهة والخادم بشكل منفصل
+
+إذا فضّلت خادم Express التقليدي (مثلاً على Render/Railway/Fly.io) بدل دوال Vercel:
 
 ```bash
 npm run build
 ```
 
-- `client/dist` — ملفات الواجهة الثابتة (يمكن نشرها على Vercel / Netlify / Cloudflare Pages)
-- `server/dist` — كود الخادم (يمكن نشره على Render / Railway / Fly.io / أي خادم Node)
+- `client/dist` — ملفات الواجهة الثابتة (انشرها على Vercel / Netlify / Cloudflare Pages)
+- `server/dist` — كود الخادم (انشره على Render / Railway / Fly.io / أي خادم Node، مع ضبط `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `EMAIL_FROM`, `CORS_ORIGIN`)
 
-عند النشر، اضبط متغيرات البيئة في منصة الاستضافة (`ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `EMAIL_FROM`, `CORS_ORIGIN`) واجعل الواجهة تستدعي رابط الخادم الفعلي بدلاً من `/api` (عبر إعداد proxy أو متغير `VITE_API_BASE` إذا احتجت تعديل ذلك).
+في هذه الحالة يجب تعديل الواجهة لتستدعي رابط الخادم الفعلي بدلاً من `/api` النسبي (مثلاً عبر متغير بيئة `VITE_API_BASE` تضيفه بنفسك في `client/src/lib/api.ts`)، لأن الواجهة والخادم سيكونان على نطاقين مختلفين.
 
 ## كيف يعمل التحليل بالذكاء الاصطناعي
 

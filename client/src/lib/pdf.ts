@@ -1,18 +1,22 @@
-import html2canvas from 'html2canvas'
+import { toCanvas } from 'html-to-image'
 import jsPDF from 'jspdf'
 
 /**
  * Renders a DOM node to a single-page A4 PDF and returns both the jsPDF
  * instance and a base64 (no data-url prefix) payload for emailing.
+ *
+ * Uses html-to-image (SVG foreignObject + native browser rendering) rather
+ * than html2canvas, which cannot parse the oklch()/oklab() colors Tailwind
+ * v4 generates and throws instead of capturing anything.
  */
 export async function renderNodeToPdf(
   node: HTMLElement,
   fileName: string,
 ): Promise<{ pdf: jsPDF; base64: string }> {
-  const canvas = await html2canvas(node, {
-    scale: 2,
+  const canvas = await toCanvas(node, {
+    pixelRatio: 2,
     backgroundColor: '#0b0d10',
-    useCORS: true,
+    cacheBust: true,
   })
 
   const imgData = canvas.toDataURL('image/jpeg', 0.92)

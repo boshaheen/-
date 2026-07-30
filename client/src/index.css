@@ -1,0 +1,20 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Tajawal', system-ui, 'Segoe UI', Roboto, sans-serif;
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: #0b0d10;
+  color: #f5f1e8;
+}
+
+#root {
+  min-height: 100svh;
+}

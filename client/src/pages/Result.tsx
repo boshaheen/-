@@ -15,6 +15,7 @@ export default function Result() {
   const [emailOpen, setEmailOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [emailStatus, setEmailStatus] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   if (!result) {
     return (
@@ -32,9 +33,12 @@ export default function Result() {
   async function handleDownloadPdf() {
     if (!reportRef.current) return
     setBusy('pdf')
+    setActionError(null)
     try {
       const { pdf } = await renderNodeToPdf(reportRef.current, fileName)
       downloadPdf(pdf, fileName)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'تعذّر تصدير التقرير')
     } finally {
       setBusy(null)
     }
@@ -43,12 +47,15 @@ export default function Result() {
   async function handleShare() {
     if (!reportRef.current || !result) return
     setBusy('share')
+    setActionError(null)
     try {
       const text = buildWhatsAppText(result)
       const { base64 } = await renderNodeToPdf(reportRef.current, fileName)
       const file = base64ToFile(base64, fileName)
       const shared = await shareFile(file, text)
       if (!shared) openWhatsAppShare(text)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'تعذّرت المشاركة')
     } finally {
       setBusy(null)
     }
@@ -145,6 +152,11 @@ export default function Result() {
       </div>
 
       <div className="flex flex-col gap-3">
+        {actionError && (
+          <p className="rounded-lg border border-red-400/30 bg-red-400/10 p-2 text-center text-xs text-red-300">
+            {actionError}
+          </p>
+        )}
         <div className="flex gap-3">
           <button
             type="button"

@@ -1,5 +1,5 @@
-const MAX_DIMENSION = 1600
-const JPEG_QUALITY = 0.82
+const MAX_DIMENSION = 2000
+const JPEG_QUALITY = 0.9
 
 export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {

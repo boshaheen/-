@@ -53,7 +53,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
   function handleCapture() {
     const video = videoRef.current
     if (!video) return
-    const maxDimension = 1600
+    const maxDimension = 2000
     const scale = Math.min(1, maxDimension / Math.max(video.videoWidth, video.videoHeight))
     const canvas = document.createElement('canvas')
     canvas.width = Math.round(video.videoWidth * scale)
@@ -61,7 +61,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-    onCapture(canvas.toDataURL('image/jpeg', 0.85))
+    onCapture(canvas.toDataURL('image/jpeg', 0.9))
   }
 
   return (

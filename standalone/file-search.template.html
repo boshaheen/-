@@ -1,0 +1,825 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>محرك بحث داخل الملفات</title>
+<meta name="description" content="ابحث عن أي عبارة داخل ملفات PDF والصور (OCR) وWord وExcel وملفات مضغوطة، كل ذلك من داخل المتصفح دون رفع ملفاتك لأي خادم." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%230b0d10'/%3E%3Ccircle cx='21' cy='21' r='12' fill='none' stroke='%23fbbf24' stroke-width='5'/%3E%3Cline x1='30' y1='30' x2='40' y2='40' stroke='%23fbbf24' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E" />
+
+<!-- PDF/Word/Excel/zip support is embedded below (base64) — no CDN needed for those, so they
+     can't fail the way a guessed CDN path/version can. Only image OCR still needs the internet
+     (tesseract.js's engine + language data are too large to embed offline). -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet" />
+
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Tajawal', system-ui, 'Segoe UI', Roboto, sans-serif;
+    background: #0b0d10;
+    color: #f5f1e8;
+    min-height: 100svh;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 16px 64px; }
+  header.top { padding: 32px 0 16px; text-align: center; }
+  h1 { font-size: 28px; font-weight: 900; letter-spacing: -0.01em; margin: 0; }
+  header.top p { margin: 10px 0 0; font-size: 14px; color: rgba(245,241,232,.6); }
+
+  .dropzone {
+    cursor: pointer;
+    border: 2px dashed rgba(255,255,255,.15);
+    border-radius: 16px;
+    padding: 40px 24px;
+    text-align: center;
+    transition: border-color .15s, background-color .15s;
+  }
+  .dropzone:hover, .dropzone:focus-visible { border-color: rgba(255,255,255,.3); }
+  .dropzone.drag { border-color: #fbbf24; background: rgba(251,191,36,.1); }
+  .dropzone .emoji { font-size: 36px; }
+  .dropzone p.title { margin: 12px 0 0; font-size: 17px; font-weight: 700; }
+  .dropzone p.sub { margin: 4px 0 0; font-size: 13px; color: rgba(245,241,232,.6); }
+  .dropzone p.priv { margin: 12px 0 0; font-size: 12px; color: rgba(245,241,232,.4); }
+
+  section.files { margin-top: 20px; }
+  .files-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .files-head h2 { font-size: 13px; font-weight: 700; color: rgba(245,241,232,.7); margin: 0; }
+  .clear-btn { background: none; border: none; color: rgba(245,241,232,.4); font-size: 12px; cursor: pointer; }
+  .clear-btn:hover { color: rgba(245,241,232,.7); }
+
+  ul.file-list, ul.match-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  li.file-row {
+    display: flex; align-items: center; gap: 10px;
+    border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.05);
+    border-radius: 12px; padding: 8px 12px;
+  }
+  li.file-row .icon { font-size: 20px; }
+  li.file-row .body { min-width: 0; flex: 1; }
+  li.file-row .name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  li.file-row .meta { margin-top: 2px; font-size: 12px; display: flex; flex-wrap: wrap; gap: 0 8px; }
+  li.file-row .meta .size { color: rgba(245,241,232,.4); }
+  li.file-row .meta .note { color: rgba(245,241,232,.4); }
+  .status-queued { color: rgba(245,241,232,.4); }
+  .status-processing { color: #fcd34d; }
+  .status-done { color: #34d399; }
+  .status-error { color: #f87171; }
+  .status-unsupported { color: rgba(245,241,232,.3); }
+  .err-text { margin: 2px 0 0; font-size: 12px; color: #f87171; }
+  .progress-track { margin-top: 6px; height: 4px; width: 100%; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.1); }
+  .progress-fill { height: 100%; border-radius: 999px; background: #fbbf24; transition: width .2s; }
+  .remove-btn { flex-shrink: 0; border: none; background: none; color: rgba(245,241,232,.4); cursor: pointer; padding: 6px; border-radius: 999px; font-size: 14px; }
+  .remove-btn:hover { color: #fff; background: rgba(255,255,255,.1); }
+
+  .search-wrap { position: sticky; top: 0; z-index: 10; background: rgba(11,13,16,.95); backdrop-filter: blur(6px); padding: 12px 0; margin-top: 24px; }
+  .search-input-box { position: relative; }
+  .search-input-box .icon { position: absolute; inset-inline-end: 12px; top: 0; bottom: 0; display: flex; align-items: center; color: rgba(245,241,232,.4); pointer-events: none; }
+  input[type="search"] {
+    width: 100%; border-radius: 12px; border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.05);
+    padding: 12px 40px 12px 16px; font-size: 14px; color: inherit; outline: none;
+  }
+  input[type="search"]:focus { border-color: #fbbf24; }
+  input[type="search"]::placeholder { color: rgba(245,241,232,.35); }
+  .search-status { margin: 8px 0 0; font-size: 12px; color: rgba(245,241,232,.4); }
+
+  .copy-all-row { display: flex; justify-content: flex-end; margin: 12px 0; }
+  .copy-all-btn {
+    border: 1px solid rgba(251,191,36,.4); background: rgba(251,191,36,.1); color: #fcd34d;
+    border-radius: 10px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .copy-all-btn:hover { background: rgba(251,191,36,.2); }
+
+  .empty-results { border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.05); border-radius: 12px; padding: 24px; text-align: center; color: rgba(245,241,232,.5); }
+
+  .results { display: flex; flex-direction: column; gap: 12px; }
+  details.group { border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.05); border-radius: 12px; padding: 12px; }
+  details.group summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  details.group summary::-webkit-details-marker { display: none; }
+  details.group summary .gname { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 700; }
+  .badge { flex-shrink: 0; border-radius: 999px; background: rgba(251,191,36,.2); color: #fcd34d; font-size: 12px; padding: 2px 8px; }
+  .copy-btn {
+    flex-shrink: 0; border: 1px solid rgba(255,255,255,.15); background: none; color: rgba(245,241,232,.7);
+    border-radius: 8px; padding: 4px 8px; font-size: 12px; cursor: pointer;
+  }
+  .copy-btn:hover { border-color: rgba(255,255,255,.3); color: #fff; }
+  ul.match-list { margin-top: 12px; gap: 8px; }
+  li.match-item { display: flex; align-items: flex-start; gap: 8px; background: rgba(0,0,0,.2); border-radius: 10px; padding: 8px 12px; font-size: 14px; line-height: 1.7; }
+  li.match-item .mbody { min-width: 0; flex: 1; }
+  li.match-item .ulabel { margin: 0 0 4px; font-size: 11px; color: rgba(245,241,232,.4); }
+  mark { background: rgba(251,191,36,.9); color: #000; border-radius: 3px; padding: 0 2px; }
+
+  footer.bottom { margin-top: 40px; text-align: center; font-size: 12px; color: rgba(245,241,232,.3); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <h1>🔍 محرك بحث داخل الملفات</h1>
+      <p>ارفع PDF أو صورة أو Word أو Excel أو أرشيف مضغوط، وابحث عن أي عبارة داخل محتواها — مع نسخ النتيجة بضغطة زر.</p>
+    </header>
+
+    <div id="dropzone" class="dropzone" role="button" tabindex="0">
+      <div class="emoji">📂</div>
+      <p class="title">اسحب وأفلت الملفات هنا، أو اضغط للاختيار</p>
+      <p class="sub">PDF · صور (JPG/PNG…) · Word (docx) · Excel (xlsx/csv) · أرشيف مضغوط (zip) يحتوي على أي منها</p>
+      <p class="priv">🔒 كل المعالجة تتم داخل متصفحك — ملفاتك لا تُرفع لأي خادم. PDF/Word/Excel/مضغوط تعمل حتى بلا إنترنت؛ الصور (OCR) وحدها تحتاج اتصالاً.</p>
+      <input id="fileInput" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.gif,.docx,.xlsx,.xls,.xlsm,.csv,.zip" style="display:none" />
+    </div>
+
+    <section id="filesSection" class="files" style="display:none">
+      <div class="files-head">
+        <h2 id="filesTitle">الملفات (0)</h2>
+        <button class="clear-btn" id="clearAllBtn">مسح الكل</button>
+      </div>
+      <ul class="file-list" id="fileList"></ul>
+    </section>
+
+    <div class="search-wrap">
+      <div class="search-input-box">
+        <input id="searchInput" type="search" placeholder="ابحث عن كلمة أو عبارة داخل محتوى الملفات..." dir="auto" />
+        <span class="icon">🔎</span>
+      </div>
+      <p class="search-status" id="searchStatus"></p>
+    </div>
+    <div class="copy-all-row" id="copyAllRow" style="display:none">
+      <button class="copy-all-btn" id="copyAllBtn">نسخ كل النتائج</button>
+    </div>
+    <div id="resultsRoot"></div>
+
+    <footer class="bottom">يعمل بالكامل من داخل متصفحك (JavaScript + WebAssembly) — لا يتم رفع أي ملف إلى أي خادم. مكتبات PDF/Word/Excel/المضغوط مضمّنة داخل هذا الملف؛ فقط ميزة OCR للصور تحمّل محرّكها عند أول استخدام.</footer>
+  </div>
+
+<!-- Embedded libraries: pdf.js, JSZip, mammoth and SheetJS(xlsx) are base64-encoded straight from
+     their official npm packages and loaded from in-memory Blob URLs — no network request, no
+     CDN path/version to get wrong. Only tesseract.js (image OCR) still fetches its (multi-MB)
+     engine + language data from a CDN at first use, since embedding that offline isn't practical
+     in a single file. -->
+<script id="lib-jszip" type="application/octet-stream;base64">__JSZIP_B64__</script>
+<script id="lib-mammoth" type="application/octet-stream;base64">__MAMMOTH_B64__</script>
+<script id="lib-xlsx" type="application/octet-stream;base64">__XLSX_B64__</script>
+<script id="lib-tesseract" type="application/octet-stream;base64">__TESSERACT_B64__</script>
+<script id="lib-pdfjs" type="application/octet-stream;base64">__PDFJS_B64__</script>
+<script id="lib-pdfjs-worker" type="application/octet-stream;base64">__PDFJS_WORKER_B64__</script>
+
+<script>
+'use strict';
+
+/* ---------------------------------------------------------------------- */
+/* embedded-library loader                                                */
+/* ---------------------------------------------------------------------- */
+function b64ScriptToBlobUrl(scriptId, mime) {
+  const b64 = document.getElementById(scriptId).textContent.trim();
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type: mime }));
+}
+function loadClassicScript(url) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = url;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('تعذّر تشغيل المكتبة المضمّنة (embedded library) — قد يكون متصفحك قديمًا جدًا.'));
+    document.head.appendChild(s);
+  });
+}
+function requireLib(global, libLabel) {
+  if (!global) throw new Error(`تعذّر تحميل مكتبة ${libLabel}. حدّث الصفحة وحاول مجددًا.`);
+}
+
+let jszipReady = null;
+function ensureJSZip() {
+  if (!jszipReady) jszipReady = loadClassicScript(b64ScriptToBlobUrl('lib-jszip', 'text/javascript')).then(() => !!window.JSZip);
+  return jszipReady;
+}
+let mammothReady = null;
+function ensureMammoth() {
+  if (!mammothReady) mammothReady = loadClassicScript(b64ScriptToBlobUrl('lib-mammoth', 'text/javascript')).then(() => !!window.mammoth);
+  return mammothReady;
+}
+let xlsxReady = null;
+function ensureXLSX() {
+  if (!xlsxReady) xlsxReady = loadClassicScript(b64ScriptToBlobUrl('lib-xlsx', 'text/javascript')).then(() => !!window.XLSX);
+  return xlsxReady;
+}
+let tesseractLibReady = null;
+function ensureTesseractLib() {
+  if (!tesseractLibReady) tesseractLibReady = loadClassicScript(b64ScriptToBlobUrl('lib-tesseract', 'text/javascript')).then(() => !!window.Tesseract);
+  return tesseractLibReady;
+}
+let pdfjsRef = null;
+let pdfjsReady = null;
+function ensurePdfjs() {
+  if (!pdfjsReady) {
+    pdfjsReady = (async () => {
+      const libUrl = b64ScriptToBlobUrl('lib-pdfjs', 'text/javascript');
+      const mod = await import(/* webpackIgnore: true */ libUrl);
+      const workerUrl = b64ScriptToBlobUrl('lib-pdfjs-worker', 'text/javascript');
+      mod.GlobalWorkerOptions.workerSrc = workerUrl;
+      pdfjsRef = mod;
+      return true;
+    })().catch((err) => { pdfjsReady = null; throw err; });
+  }
+  return pdfjsReady;
+}
+
+/* ---------------------------------------------------------------------- */
+/* detect.js                                                              */
+/* ---------------------------------------------------------------------- */
+const IMAGE_EXTS = ['png','jpg','jpeg','webp','bmp','gif'];
+const SPREADSHEET_EXTS = ['xlsx','xls','xlsm','csv'];
+
+function extOf(name) {
+  const dot = name.toLowerCase().lastIndexOf('.');
+  return dot === -1 ? '' : name.toLowerCase().slice(dot + 1);
+}
+function detectKind(name) {
+  const ext = extOf(name);
+  if (ext === 'pdf') return 'pdf';
+  if (IMAGE_EXTS.includes(ext)) return 'image';
+  if (ext === 'docx') return 'docx';
+  if (SPREADSHEET_EXTS.includes(ext)) return 'xlsx';
+  if (ext === 'zip') return 'zip';
+  return null;
+}
+function kindIcon(kind) {
+  switch (kind) {
+    case 'pdf': return '📄';
+    case 'image': return '🖼️';
+    case 'docx': return '📝';
+    case 'xlsx': return '📊';
+    case 'zip': return '🗜️';
+    default: return '❓';
+  }
+}
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} بايت`;
+  const units = ['كيلوبايت', 'ميغابايت', 'غيغابايت'];
+  let value = bytes / 1024, i = 0;
+  while (value >= 1024 && i < units.length - 1) { value /= 1024; i++; }
+  return `${value.toFixed(1)} ${units[i]}`;
+}
+
+/* ---------------------------------------------------------------------- */
+/* search.js — Arabic/Latin-aware substring search                        */
+/* ---------------------------------------------------------------------- */
+const DIACRITIC_RANGES = [[0x0610,0x061a],[0x064b,0x065f],[0x06d6,0x06ed]];
+function normalizeChar(ch) {
+  const code = ch.codePointAt(0);
+  if (code === 0x0640) return null;
+  for (const [s,e] of DIACRITIC_RANGES) if (code >= s && code <= e) return null;
+  switch (ch) {
+    case 'أ': case 'إ': case 'آ': case 'ٱ': return 'ا';
+    case 'ى': return 'ي';
+    case 'ة': return 'ه';
+    case 'ؤ': return 'و';
+    case 'ئ': return 'ي';
+    default: return ch.toLowerCase();
+  }
+}
+function normalize(text) {
+  let out = '';
+  const map = [];
+  for (let i = 0; i < text.length; i++) {
+    const n = normalizeChar(text[i]);
+    if (n === null) continue;
+    for (const c of n) { out += c; map.push(i); }
+  }
+  return { text: out, map };
+}
+function findMatches(text, query, limit = 500) {
+  const q = normalize(query).text;
+  if (!q.trim()) return [];
+  const { text: n, map } = normalize(text);
+  const results = [];
+  let from = 0;
+  while (results.length < limit) {
+    const at = n.indexOf(q, from);
+    if (at === -1) break;
+    const start = map[at];
+    const lastIdx = at + q.length - 1;
+    const end = lastIdx < map.length - 1 ? map[lastIdx + 1] : map[lastIdx] + 1;
+    results.push({ start, end });
+    from = at + q.length;
+  }
+  return results;
+}
+function buildSnippet(text, start, end, radius = 50) {
+  const from = Math.max(0, start - radius);
+  const to = Math.min(text.length, end + radius);
+  const prefix = from > 0 ? '…' : '';
+  const suffix = to < text.length ? '…' : '';
+  const flat = text.slice(from, to).replace(/[\t\n\r\f\v]/g, ' ');
+  const body = flat.trim();
+  const leading = flat.length - flat.trimStart().length;
+  const matchStart = prefix.length + Math.max(0, start - from - leading);
+  const matchEnd = Math.min(matchStart + (end - start), prefix.length + body.length);
+  return { text: prefix + body + suffix, matchStart, matchEnd };
+}
+
+/* ---------------------------------------------------------------------- */
+/* clipboard.js                                                           */
+/* ---------------------------------------------------------------------- */
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (e) { /* fall through */ }
+  try {
+    const el = document.createElement('textarea');
+    el.value = text;
+    el.style.position = 'fixed';
+    el.style.opacity = '0';
+    document.body.appendChild(el);
+    el.focus(); el.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(el);
+    return ok;
+  } catch (e) { return false; }
+}
+
+/* ---------------------------------------------------------------------- */
+/* extractors                                                             */
+/* ---------------------------------------------------------------------- */
+async function extractPdf(blob, onProgress) {
+  await ensurePdfjs();
+  requireLib(pdfjsRef, 'قراءة PDF');
+  const buffer = await blob.arrayBuffer();
+  const doc = await pdfjsRef.getDocument({ data: buffer }).promise;
+  const units = [];
+  try {
+    for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
+      const page = await doc.getPage(pageNum);
+      const content = await page.getTextContent();
+      const text = content.items.map((it) => ('str' in it ? it.str : '')).join(' ');
+      units.push({ label: `صفحة ${pageNum}`, text });
+      onProgress && onProgress(Math.round((pageNum / doc.numPages) * 100));
+      page.cleanup();
+    }
+  } finally {
+    await doc.destroy();
+  }
+  return units;
+}
+
+async function extractDocx(blob) {
+  await ensureMammoth();
+  requireLib(window.mammoth, 'قراءة Word');
+  const arrayBuffer = await blob.arrayBuffer();
+  const result = await mammoth.extractRawText({ arrayBuffer });
+  return [{ label: 'المستند', text: result.value }];
+}
+
+async function extractSpreadsheet(blob, fileName) {
+  await ensureXLSX();
+  requireLib(window.XLSX, 'قراءة Excel');
+  const isCsv = extOf(fileName) === 'csv';
+  const workbook = isCsv
+    ? XLSX.read(await blob.text(), { type: 'string' })
+    : XLSX.read(await blob.arrayBuffer(), { type: 'array' });
+  return workbook.SheetNames.map((name) => {
+    const sheet = workbook.Sheets[name];
+    const text = XLSX.utils.sheet_to_csv(sheet, { FS: '  |  ', blankrows: false });
+    return { label: isCsv ? 'الجدول' : `ورقة "${name}"`, text };
+  });
+}
+
+let ocrWorkerPromise = null;
+let ocrProgressCb = null;
+function withTimeout(promise, ms, message) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });
+  });
+}
+function getOcrWorker() {
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = ensureTesseractLib().then((ok) => {
+      requireLib(ok && window.Tesseract, 'Tesseract');
+      return withTimeout(
+        Tesseract.createWorker('ara+eng', undefined, {
+          logger: (m) => { if (m.status === 'recognizing text') ocrProgressCb && ocrProgressCb(Math.round(m.progress * 100)); },
+        }),
+        60000,
+        'تعذّر تحميل محرك التعرف الضوئي على الحروف (OCR) — تحقّق من اتصالك بالإنترنت وحاول مجددًا.'
+      );
+    }).catch((err) => { ocrWorkerPromise = null; throw err; });
+  }
+  return ocrWorkerPromise;
+}
+async function extractImage(blob, onProgress) {
+  const worker = await getOcrWorker();
+  ocrProgressCb = onProgress || null;
+  try {
+    const { data: { text } } = await withTimeout(worker.recognize(blob), 90000, 'استغرق التعرف الضوئي على النص وقتًا طويلاً جدًا.');
+    onProgress && onProgress(100);
+    return [{ label: 'نص الصورة (OCR)', text }];
+  } finally {
+    ocrProgressCb = null;
+  }
+}
+async function terminateOcrWorker() {
+  if (!ocrWorkerPromise) return;
+  const p = ocrWorkerPromise;
+  ocrWorkerPromise = null;
+  try { const w = await p; await w.terminate(); } catch (e) { /* never finished init */ }
+}
+
+async function extractUnits(kind, blob, fileName, onProgress) {
+  switch (kind) {
+    case 'pdf': return extractPdf(blob, onProgress);
+    case 'docx': return extractDocx(blob);
+    case 'xlsx': return extractSpreadsheet(blob, fileName);
+    case 'image': return extractImage(blob, onProgress);
+  }
+}
+
+const MAX_ZIP_ENTRIES = 300;
+function isJunk(path) {
+  const base = path.split('/').pop() || '';
+  return path.startsWith('__MACOSX/') || base.startsWith('.') || base === '';
+}
+async function listZipEntries(blob, basePath) {
+  await ensureJSZip();
+  requireLib(window.JSZip, 'فك الأرشيف المضغوط');
+  const zip = await JSZip.loadAsync(blob);
+  const out = [];
+  for (const entry of Object.values(zip.files)) {
+    if (out.length >= MAX_ZIP_ENTRIES) break;
+    if (entry.dir || isJunk(entry.name)) continue;
+    const fullPath = `${basePath}/${entry.name}`;
+    const kind = detectKind(entry.name);
+    if (!kind) continue;
+    const entryBlob = await entry.async('blob');
+    if (kind === 'zip') {
+      const nested = await listZipEntries(entryBlob, fullPath);
+      out.push(...nested.slice(0, MAX_ZIP_ENTRIES - out.length));
+    } else {
+      out.push({ path: fullPath, blob: entryBlob, kind });
+    }
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------------------- */
+/* app state + rendering                                                  */
+/* ---------------------------------------------------------------------- */
+function newId() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'id-' + Math.random().toString(36).slice(2) + Date.now();
+}
+
+const state = {
+  files: [],        // { id, name, kind, sizeBytes, status, progress, error, note, units }
+  blobs: new Map(),
+  query: '',
+  debouncedQuery: '',
+  processing: false,
+};
+
+const el = {
+  dropzone: document.getElementById('dropzone'),
+  fileInput: document.getElementById('fileInput'),
+  filesSection: document.getElementById('filesSection'),
+  filesTitle: document.getElementById('filesTitle'),
+  fileList: document.getElementById('fileList'),
+  clearAllBtn: document.getElementById('clearAllBtn'),
+  searchInput: document.getElementById('searchInput'),
+  searchStatus: document.getElementById('searchStatus'),
+  copyAllRow: document.getElementById('copyAllRow'),
+  copyAllBtn: document.getElementById('copyAllBtn'),
+  resultsRoot: document.getElementById('resultsRoot'),
+};
+
+const STATUS_LABEL = {
+  queued: 'بالانتظار…', processing: 'جارٍ الاستخراج…', done: 'جاهز', error: 'فشل', unsupported: 'صيغة غير مدعومة',
+};
+const UNIT_WORD = { xlsx: 'ورقة/جدول', pdf: 'صفحة' };
+
+function addBlob(name, blob) {
+  const id = newId();
+  const kind = detectKind(name);
+  state.blobs.set(id, blob);
+  return { id, name, kind: kind || 'pdf', sizeBytes: blob.size, status: kind ? 'queued' : 'unsupported', progress: 0, units: [] };
+}
+
+function handleFiles(list) {
+  const entries = Array.from(list).map((f) => addBlob(f.name, f));
+  state.files.push(...entries);
+  render();
+  processQueue();
+}
+
+function removeFile(id) {
+  state.blobs.delete(id);
+  state.files = state.files.filter((f) => f.id !== id);
+  render();
+}
+
+function clearAll() {
+  state.blobs.clear();
+  state.files = [];
+  state.query = '';
+  el.searchInput.value = '';
+  state.debouncedQuery = '';
+  render();
+  terminateOcrWorker();
+}
+
+function updateFile(id, patch) {
+  const f = state.files.find((x) => x.id === id);
+  if (!f) return;
+  Object.assign(f, patch);
+  render();
+}
+
+async function processQueue() {
+  if (state.processing) return;
+  const next = state.files.find((f) => f.status === 'queued');
+  if (!next) return;
+  state.processing = true;
+  const blob = state.blobs.get(next.id);
+  try {
+    if (!blob) {
+      updateFile(next.id, { status: 'error', error: 'تعذّر قراءة الملف' });
+      return;
+    }
+    updateFile(next.id, { status: 'processing', progress: 0 });
+    if (next.kind === 'zip') {
+      const entries = await listZipEntries(blob, next.name);
+      const newFiles = entries.map((entry) => {
+        const id = newId();
+        state.blobs.set(id, entry.blob);
+        return { id, name: entry.path, kind: entry.kind, sizeBytes: entry.blob.size, status: 'queued', progress: 0, units: [] };
+      });
+      const f = state.files.find((x) => x.id === next.id);
+      if (f) {
+        f.status = 'done'; f.progress = 100;
+        f.note = entries.length ? `تم استخراج ${entries.length} ملف مدعوم` : 'لا يحتوي على ملفات مدعومة';
+      }
+      state.files.push(...newFiles);
+      render();
+    } else {
+      const units = await extractUnits(next.kind, blob, next.name, (p) => updateFile(next.id, { progress: p }));
+      updateFile(next.id, { status: 'done', progress: 100, units });
+    }
+  } catch (err) {
+    updateFile(next.id, { status: 'error', error: err && err.message ? err.message : 'فشل استخراج محتوى الملف' });
+  } finally {
+    state.processing = false;
+    processQueue();
+  }
+}
+
+/* ---- results computation ---- */
+function computeGroups() {
+  const q = state.debouncedQuery.trim();
+  if (!q) return [];
+  const out = [];
+  for (const file of state.files) {
+    if (file.status !== 'done') continue;
+    const matches = [];
+    for (const unit of file.units) {
+      for (const raw of findMatches(unit.text, q)) {
+        const snippet = buildSnippet(unit.text, raw.start, raw.end);
+        matches.push({ unitLabel: unit.label, snippet: snippet.text, matchStart: snippet.matchStart, matchEnd: snippet.matchEnd });
+      }
+    }
+    if (matches.length) out.push({ file, matches });
+  }
+  return out;
+}
+function formatGroupText(group) {
+  const lines = group.matches.map((m) => `  • [${m.unitLabel}] ${m.snippet}`);
+  return `📄 ${group.file.name} (${group.matches.length} نتيجة)\n${lines.join('\n')}`;
+}
+
+/* ---- DOM helpers ---- */
+function clearChildren(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+function makeCopyButton(getText, label) {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.type = 'button';
+  btn.textContent = label || 'نسخ';
+  btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const ok = await copyText(getText());
+    if (ok) {
+      btn.textContent = '✓ تم النسخ';
+      setTimeout(() => { btn.textContent = label || 'نسخ'; }, 1500);
+    }
+  });
+  return btn;
+}
+
+function renderFileList() {
+  el.filesSection.style.display = state.files.length ? '' : 'none';
+  el.filesTitle.textContent = `الملفات (${state.files.length})`;
+  clearChildren(el.fileList);
+  for (const f of state.files) {
+    const li = document.createElement('li');
+    li.className = 'file-row';
+
+    const icon = document.createElement('span');
+    icon.className = 'icon';
+    icon.textContent = f.status === 'unsupported' ? '❓' : kindIcon(f.kind);
+    li.appendChild(icon);
+
+    const body = document.createElement('div');
+    body.className = 'body';
+
+    const name = document.createElement('p');
+    name.className = 'name';
+    name.dir = 'auto';
+    name.title = f.name;
+    name.textContent = f.name;
+    body.appendChild(name);
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const size = document.createElement('span');
+    size.className = 'size';
+    size.textContent = formatBytes(f.sizeBytes);
+    meta.appendChild(size);
+    const status = document.createElement('span');
+    status.className = 'status-' + f.status;
+    status.textContent = STATUS_LABEL[f.status];
+    meta.appendChild(status);
+    if (f.status === 'done' && f.units.length > 0) {
+      const cnt = document.createElement('span');
+      cnt.className = 'note';
+      cnt.textContent = `· ${f.units.length} ${UNIT_WORD[f.kind] || 'قسم'}`;
+      meta.appendChild(cnt);
+    }
+    if (f.note) {
+      const note = document.createElement('span');
+      note.className = 'note';
+      note.textContent = '· ' + f.note;
+      meta.appendChild(note);
+    }
+    body.appendChild(meta);
+
+    if (f.status === 'processing') {
+      const track = document.createElement('div');
+      track.className = 'progress-track';
+      const fill = document.createElement('div');
+      fill.className = 'progress-fill';
+      fill.style.width = Math.max(5, f.progress) + '%';
+      track.appendChild(fill);
+      body.appendChild(track);
+    }
+    if (f.status === 'error' && f.error) {
+      const errText = document.createElement('p');
+      errText.className = 'err-text';
+      errText.dir = 'auto';
+      errText.textContent = f.error;
+      body.appendChild(errText);
+    }
+    li.appendChild(body);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'remove-btn';
+    removeBtn.setAttribute('aria-label', 'إزالة الملف');
+    removeBtn.textContent = '✕';
+    removeBtn.addEventListener('click', () => removeFile(f.id));
+    li.appendChild(removeBtn);
+
+    el.fileList.appendChild(li);
+  }
+}
+
+function renderResults() {
+  const q = state.debouncedQuery;
+  const groups = computeGroups();
+  const total = groups.reduce((s, g) => s + g.matches.length, 0);
+  const readyCount = state.files.filter((f) => f.status === 'done' || f.status === 'error' || f.status === 'unsupported').length;
+
+  if (state.files.length === 0) {
+    el.searchStatus.textContent = '';
+  } else if (readyCount < state.files.length) {
+    el.searchStatus.textContent = `جاهز ${readyCount} من ${state.files.length} ملف…`;
+  } else if (q.trim()) {
+    el.searchStatus.textContent = `${total} نتيجة`;
+  } else {
+    el.searchStatus.textContent = `${state.files.length} ملف جاهز للبحث`;
+  }
+
+  el.copyAllRow.style.display = (q.trim() && total > 0) ? '' : 'none';
+
+  clearChildren(el.resultsRoot);
+  if (!q.trim()) return;
+
+  if (total === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-results';
+    empty.textContent = `لا توجد نتائج لِـ «${q}»`;
+    el.resultsRoot.appendChild(empty);
+    return;
+  }
+
+  const results = document.createElement('div');
+  results.className = 'results';
+  for (const group of groups) {
+    const details = document.createElement('details');
+    details.className = 'group';
+    details.open = true;
+
+    const summary = document.createElement('summary');
+    const gicon = document.createElement('span');
+    gicon.textContent = kindIcon(group.file.kind);
+    summary.appendChild(gicon);
+    const gname = document.createElement('span');
+    gname.className = 'gname';
+    gname.dir = 'auto';
+    gname.textContent = group.file.name;
+    summary.appendChild(gname);
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = `${group.matches.length} نتيجة`;
+    summary.appendChild(badge);
+    summary.appendChild(makeCopyButton(() => formatGroupText(group), 'نسخ نتائج الملف'));
+    details.appendChild(summary);
+
+    const ul = document.createElement('ul');
+    ul.className = 'match-list';
+    for (const m of group.matches) {
+      const li = document.createElement('li');
+      li.className = 'match-item';
+      const mbody = document.createElement('div');
+      mbody.className = 'mbody';
+      const ulabel = document.createElement('p');
+      ulabel.className = 'ulabel';
+      ulabel.textContent = m.unitLabel;
+      mbody.appendChild(ulabel);
+
+      const span = document.createElement('span');
+      span.dir = 'auto';
+      span.appendChild(document.createTextNode(m.snippet.slice(0, m.matchStart)));
+      const mark = document.createElement('mark');
+      mark.textContent = m.snippet.slice(m.matchStart, m.matchEnd);
+      span.appendChild(mark);
+      span.appendChild(document.createTextNode(m.snippet.slice(m.matchEnd)));
+      mbody.appendChild(span);
+
+      li.appendChild(mbody);
+      li.appendChild(makeCopyButton(() => m.snippet));
+      ul.appendChild(li);
+    }
+    details.appendChild(ul);
+    results.appendChild(details);
+  }
+  el.resultsRoot.appendChild(results);
+}
+
+function render() {
+  renderFileList();
+  renderResults();
+}
+
+/* ---------------------------------------------------------------------- */
+/* wiring                                                                  */
+/* ---------------------------------------------------------------------- */
+el.dropzone.addEventListener('click', () => el.fileInput.click());
+el.dropzone.addEventListener('keydown', (e) => { if (e.key === 'Enter') el.fileInput.click(); });
+el.dropzone.addEventListener('dragover', (e) => { e.preventDefault(); el.dropzone.classList.add('drag'); });
+el.dropzone.addEventListener('dragleave', () => el.dropzone.classList.remove('drag'));
+el.dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  el.dropzone.classList.remove('drag');
+  if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+});
+el.fileInput.addEventListener('change', (e) => {
+  if (e.target.files.length) handleFiles(e.target.files);
+  e.target.value = '';
+});
+el.clearAllBtn.addEventListener('click', clearAll);
+
+let debounceTimer = null;
+el.searchInput.addEventListener('input', (e) => {
+  state.query = e.target.value;
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => { state.debouncedQuery = state.query; renderResults(); }, 250);
+});
+
+el.copyAllBtn.addEventListener('click', async () => {
+  const groups = computeGroups();
+  const text = groups.map(formatGroupText).join('\n\n');
+  const ok = await copyText(text);
+  if (ok) {
+    el.copyAllBtn.textContent = '✓ تم نسخ كل النتائج';
+    setTimeout(() => { el.copyAllBtn.textContent = 'نسخ كل النتائج'; }, 1500);
+  }
+});
+
+window.addEventListener('beforeunload', () => { terminateOcrWorker(); });
+
+render();
+</script>
+</body>
+</html>

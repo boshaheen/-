@@ -110,8 +110,35 @@
   li.match-item .mbody { min-width: 0; flex: 1; }
   li.match-item .ulabel { margin: 0 0 4px; font-size: 11px; color: rgba(245,241,232,.4); }
   mark { background: rgba(251,191,36,.9); color: #000; border-radius: 3px; padding: 0 2px; }
+  .match-actions { flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; }
+  .view-btn {
+    border: 1px solid rgba(251,191,36,.3); background: rgba(251,191,36,.1); color: #fcd34d;
+    border-radius: 8px; padding: 4px 8px; font-size: 12px; cursor: pointer;
+  }
+  .view-btn:hover { border-color: rgba(251,191,36,.5); background: rgba(251,191,36,.2); }
 
   footer.bottom { margin-top: 40px; text-align: center; font-size: 12px; color: rgba(245,241,232,.3); }
+
+  /* Page/image viewer modal */
+  .viewer-overlay {
+    display: none; position: fixed; inset: 0; z-index: 50; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.8); backdrop-filter: blur(3px); padding: 12px;
+  }
+  .viewer-overlay.open { display: flex; }
+  .viewer-box { display: flex; flex-direction: column; max-height: 90vh; width: 100%; max-width: 760px; overflow: hidden; border-radius: 16px; border: 1px solid rgba(255,255,255,.1); background: #0b0d10; }
+  .viewer-head { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid rgba(255,255,255,.1); padding: 12px 16px; }
+  .viewer-head .vtitle { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 700; }
+  .viewer-close { flex-shrink: 0; border: none; background: none; color: rgba(245,241,232,.5); cursor: pointer; padding: 6px; border-radius: 999px; font-size: 14px; }
+  .viewer-close:hover { color: #fff; background: rgba(255,255,255,.1); }
+  .viewer-body { position: relative; overflow: auto; padding: 12px; text-align: center; }
+  .viewer-body canvas, .viewer-body img { max-width: 100%; border-radius: 8px; }
+  .viewer-note { margin-top: 8px; font-size: 12px; color: rgba(245,241,232,.4); }
+  .viewer-loading { padding: 40px 0; text-align: center; font-size: 13px; color: rgba(245,241,232,.5); }
+  .viewer-img-wrap { position: relative; display: inline-block; max-width: 100%; }
+  .viewer-hl {
+    position: absolute; border: 2px solid rgba(217,119,6,.9); background: rgba(251,191,36,.4);
+    border-radius: 2px; pointer-events: none;
+  }
 </style>
 </head>
 <body>
@@ -148,6 +175,16 @@
       <button class="copy-all-btn" id="copyAllBtn">نسخ كل النتائج</button>
     </div>
     <div id="resultsRoot"></div>
+
+    <div id="viewerOverlay" class="viewer-overlay">
+      <div class="viewer-box" onclick="event.stopPropagation()">
+        <div class="viewer-head">
+          <span class="vtitle" id="viewerTitle" dir="auto"></span>
+          <button class="viewer-close" id="viewerCloseBtn" aria-label="إغلاق">✕</button>
+        </div>
+        <div class="viewer-body" id="viewerBody"></div>
+      </div>
+    </div>
 
     <footer class="bottom">يعمل بالكامل من داخل متصفحك (JavaScript + WebAssembly) — لا يتم رفع أي ملف إلى أي خادم. مكتبات PDF/Word/Excel/المضغوط مضمّنة داخل هذا الملف؛ فقط ميزة OCR للصور تحمّل محرّكها عند أول استخدام.</footer>
   </div>
@@ -353,12 +390,17 @@ async function copyText(text) {
  * word apart, and for Arabic it also stops the browser from shaping the letters into their joined
  * cursive form (a space always forces isolated letterforms). So: trust each item's own text for
  * real spaces (pdf.js already includes them when the PDF has an actual space glyph), only add a
- * line break on an actual line change, and only synthesize a space for a genuinely large
- * horizontal jump.
+ * line break on an actual line change, and otherwise decide on a space by comparing the gap to the
+ * *actual glyph width* of the surrounding text (not font height — advance width and cap-height
+ * aren't the same axis, and using width is far more reliable across fonts).
+ *
+ * Also records each item's PDF-space bounding box as a "span" over the char range it contributed,
+ * so the "عرض" (view) feature can highlight exactly where a match sits on the rendered page.
  */
 function joinTextItems(items) {
   let text = '';
   let prev = null;
+  const spans = [];
   for (const raw of items) {
     if (!('str' in raw)) continue;
     if (prev) {
@@ -369,16 +411,26 @@ function joinTextItems(items) {
       } else {
         const prevEnd = prev.dir === 'rtl' ? prev.transform[4] - prev.width : prev.transform[4] + prev.width;
         const gap = prev.dir === 'rtl' ? prevEnd - raw.transform[4] : raw.transform[4] - prevEnd;
-        const scale = Math.max(Math.abs(prev.height) || 0, Math.abs(raw.height) || 0, prevScale, 1);
+        const prevCharWidth = prev.str.length ? Math.abs(prev.width) / prev.str.length : 0;
+        const rawCharWidth = raw.str.length ? Math.abs(raw.width) / raw.str.length : 0;
+        const refWidth = Math.max(prevCharWidth, rawCharWidth, prevScale * 0.3);
         const alreadySpaced = /\s$/.test(prev.str) || /^\s/.test(raw.str);
-        if (!alreadySpaced && gap > scale * 1.1) text += ' ';
+        if (!alreadySpaced && gap > refWidth * 0.4) text += ' ';
       }
     }
+    const start = text.length;
     text += raw.str;
+    if (raw.str.trim()) {
+      const x0 = raw.dir === 'rtl' ? raw.transform[4] - raw.width : raw.transform[4];
+      const x1 = raw.dir === 'rtl' ? raw.transform[4] : raw.transform[4] + raw.width;
+      const y0 = raw.transform[5];
+      const y1 = raw.transform[5] + (raw.height || Math.abs(raw.transform[3]) || 10);
+      spans.push({ start, end: start + raw.str.length, x0, y0, x1, y1, dir: raw.dir });
+    }
     if (raw.hasEOL) text += '\n';
     prev = raw;
   }
-  return text;
+  return { text, spans };
 }
 
 async function extractPdf(blob, onProgress) {
@@ -391,8 +443,8 @@ async function extractPdf(blob, onProgress) {
     for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
       const page = await doc.getPage(pageNum);
       const content = await page.getTextContent();
-      const text = joinTextItems(content.items);
-      units.push({ label: `صفحة ${pageNum}`, text });
+      const { text, spans } = joinTextItems(content.items);
+      units.push({ label: `صفحة ${pageNum}`, text, pageIndex: pageNum, spans });
       onProgress && onProgress(Math.round((pageNum / doc.numPages) * 100));
       page.cleanup();
     }
@@ -400,6 +452,25 @@ async function extractPdf(blob, onProgress) {
     await doc.destroy();
   }
   return units;
+}
+
+/** Re-opens a PDF (from its original blob) and renders one page to a canvas, for the viewer. */
+async function renderPdfPage(blob, pageIndex, canvas, scale) {
+  await ensurePdfjs();
+  requireLib(pdfjsRef, 'قراءة PDF');
+  const buffer = await blob.arrayBuffer();
+  const doc = await pdfjsRef.getDocument({ data: buffer }).promise;
+  try {
+    const page = await doc.getPage(pageIndex);
+    const viewport = page.getViewport({ scale });
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    return { convertRect: (r) => viewport.convertToViewportRectangle(r) };
+  } finally {
+    await doc.destroy();
+  }
 }
 
 async function extractDocx(blob) {
@@ -447,13 +518,33 @@ function getOcrWorker() {
   }
   return ocrWorkerPromise;
 }
+/** Rebuilds text from tesseract's line/word structure (instead of the flat data.text) so each
+ * word keeps its bounding box — that's what lets the viewer point at the exact word on the image. */
+function buildTextWithSpans(data) {
+  const lines = data.lines || [];
+  if (!lines.length) return { text: data.text, spans: [] };
+  let text = '';
+  const spans = [];
+  for (const line of lines) {
+    for (const word of line.words) {
+      if (!word.text.trim()) continue;
+      if (text.length && !text.endsWith('\n')) text += ' ';
+      const start = text.length;
+      text += word.text;
+      spans.push({ start, end: start + word.text.length, x0: word.bbox.x0, y0: word.bbox.y0, x1: word.bbox.x1, y1: word.bbox.y1 });
+    }
+    text += '\n';
+  }
+  return { text: text.trimEnd(), spans };
+}
 async function extractImage(blob, onProgress) {
   const worker = await getOcrWorker();
   ocrProgressCb = onProgress || null;
   try {
-    const { data: { text } } = await withTimeout(worker.recognize(blob), 90000, 'استغرق التعرف الضوئي على النص وقتًا طويلاً جدًا.');
+    const { data } = await withTimeout(worker.recognize(blob), 90000, 'استغرق التعرف الضوئي على النص وقتًا طويلاً جدًا.');
     onProgress && onProgress(100);
-    return [{ label: 'نص الصورة (OCR)', text }];
+    const { text, spans } = buildTextWithSpans(data);
+    return [{ label: 'نص الصورة (OCR)', text, spans }];
   } finally {
     ocrProgressCb = null;
   }
@@ -529,6 +620,10 @@ const el = {
   copyAllRow: document.getElementById('copyAllRow'),
   copyAllBtn: document.getElementById('copyAllBtn'),
   resultsRoot: document.getElementById('resultsRoot'),
+  viewerOverlay: document.getElementById('viewerOverlay'),
+  viewerTitle: document.getElementById('viewerTitle'),
+  viewerBody: document.getElementById('viewerBody'),
+  viewerCloseBtn: document.getElementById('viewerCloseBtn'),
 };
 
 const STATUS_LABEL = {
@@ -622,7 +717,12 @@ function computeGroups() {
     for (const unit of file.units) {
       for (const raw of findMatches(unit.text, q)) {
         const snippet = buildSnippet(unit.text, raw.start, raw.end);
-        matches.push({ unitLabel: unit.label, snippet: snippet.text, matchStart: snippet.matchStart, matchEnd: snippet.matchEnd });
+        matches.push({
+          fileKind: file.kind, fileId: file.id, unitLabel: unit.label,
+          pageIndex: unit.pageIndex, spans: unit.spans,
+          start: raw.start, end: raw.end,
+          snippet: snippet.text, matchStart: snippet.matchStart, matchEnd: snippet.matchEnd,
+        });
       }
     }
     if (matches.length) out.push({ file, matches });
@@ -632,6 +732,115 @@ function computeGroups() {
 function formatGroupText(group) {
   const lines = group.matches.map((m) => `  • [${m.unitLabel}] ${m.snippet}`);
   return `📄 ${group.file.name} (${group.matches.length} نتيجة)\n${lines.join('\n')}`;
+}
+
+/* ---- "عرض" (view) — show the matched word highlighted on its real PDF page or source image ---- */
+const PDF_VIEW_SCALE = 1.8;
+
+function canView(m) {
+  if (m.fileKind === 'pdf') return !!m.pageIndex;
+  return m.fileKind === 'image';
+}
+
+/**
+ * A PDF/image span covers a whole text run (often a full line, or a whole OCR word — not just the
+ * matched substring), so highlighting the entire span would light up more than was searched for.
+ * Narrow each overlapping span to the matched character range, interpolating linearly across its
+ * width (an approximation — real glyphs aren't equal-width — but close enough for a highlight box).
+ * 'rtl' spans read right-to-left, so their first character sits at x1, not x0.
+ */
+function overlappingRects(spans, matchStart, matchEnd) {
+  const out = [];
+  for (const s of spans || []) {
+    if (s.start >= matchEnd || s.end <= matchStart) continue;
+    const len = (s.end - s.start) || 1;
+    const fromFrac = Math.max(0, matchStart - s.start) / len;
+    const toFrac = Math.min(len, matchEnd - s.start) / len;
+    const at = (frac) => (s.dir === 'rtl' ? s.x1 - frac * (s.x1 - s.x0) : s.x0 + frac * (s.x1 - s.x0));
+    const a = at(fromFrac), b = at(toFrac);
+    out.push({ x0: Math.min(a, b), x1: Math.max(a, b), y0: s.y0, y1: s.y1 });
+  }
+  return out;
+}
+
+async function openViewer(m) {
+  const blob = state.blobs.get(m.fileId);
+  const file = state.files.find((f) => f.id === m.fileId);
+  if (!blob || !file) return;
+
+  el.viewerTitle.textContent = file.name + (m.pageIndex ? ` — صفحة ${m.pageIndex}` : '');
+  clearChildren(el.viewerBody);
+  const loading = document.createElement('p');
+  loading.className = 'viewer-loading';
+  loading.textContent = 'جارٍ التحميل…';
+  el.viewerBody.appendChild(loading);
+  el.viewerOverlay.classList.add('open');
+
+  try {
+    if (file.kind === 'pdf') {
+      const canvas = document.createElement('canvas');
+      const { convertRect } = await renderPdfPage(blob, m.pageIndex, canvas, PDF_VIEW_SCALE);
+      const ctx = canvas.getContext('2d');
+      for (const r of overlappingRects(m.spans, m.start, m.end)) {
+        const [rx0, ry0, rx1, ry1] = convertRect([r.x0, r.y0, r.x1, r.y1]);
+        const x = Math.min(rx0, rx1), y = Math.min(ry0, ry1);
+        const w = Math.abs(rx1 - rx0), h = Math.abs(ry1 - ry0);
+        const pad = h * 0.15;
+        ctx.fillStyle = 'rgba(251,191,36,.45)';
+        ctx.fillRect(x - pad, y - pad, w + pad * 2, h + pad * 2);
+        ctx.strokeStyle = 'rgba(217,119,6,.9)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x - pad, y - pad, w + pad * 2, h + pad * 2);
+      }
+      clearChildren(el.viewerBody);
+      el.viewerBody.appendChild(canvas);
+      if (!(m.spans && m.spans.length)) {
+        const note = document.createElement('p');
+        note.className = 'viewer-note';
+        note.textContent = 'تعذّر تحديد موضع العبارة بدقة على الصفحة — إليك الصفحة كاملة.';
+        el.viewerBody.appendChild(note);
+      }
+    } else {
+      const url = URL.createObjectURL(blob);
+      const wrap = document.createElement('div');
+      wrap.className = 'viewer-img-wrap';
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = '';
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const rects = overlappingRects(m.spans, m.start, m.end);
+        for (const r of rects) {
+          const hl = document.createElement('div');
+          hl.className = 'viewer-hl';
+          hl.style.left = (r.x0 / img.naturalWidth) * 100 + '%';
+          hl.style.top = (r.y0 / img.naturalHeight) * 100 + '%';
+          hl.style.width = ((r.x1 - r.x0) / img.naturalWidth) * 100 + '%';
+          hl.style.height = ((r.y1 - r.y0) / img.naturalHeight) * 100 + '%';
+          wrap.appendChild(hl);
+        }
+        if (!rects.length) {
+          const note = document.createElement('p');
+          note.className = 'viewer-note';
+          note.textContent = 'تعذّر تحديد موضع العبارة بدقة على الصورة — إليك الصورة كاملة.';
+          el.viewerBody.appendChild(note);
+        }
+      };
+      wrap.appendChild(img);
+      clearChildren(el.viewerBody);
+      el.viewerBody.appendChild(wrap);
+    }
+  } catch (err) {
+    clearChildren(el.viewerBody);
+    const errEl = document.createElement('p');
+    errEl.className = 'viewer-loading';
+    errEl.textContent = 'تعذّر عرض الصفحة.';
+    el.viewerBody.appendChild(errEl);
+  }
+}
+function closeViewer() {
+  el.viewerOverlay.classList.remove('open');
+  clearChildren(el.viewerBody);
 }
 
 /* ---- DOM helpers ---- */
@@ -803,7 +1012,18 @@ function renderResults() {
       mbody.appendChild(span);
 
       li.appendChild(mbody);
-      li.appendChild(makeCopyButton(() => m.snippet));
+      const actions = document.createElement('div');
+      actions.className = 'match-actions';
+      if (canView(m)) {
+        const viewBtn = document.createElement('button');
+        viewBtn.className = 'view-btn';
+        viewBtn.type = 'button';
+        viewBtn.textContent = 'عرض';
+        viewBtn.addEventListener('click', (e) => { e.stopPropagation(); openViewer(m); });
+        actions.appendChild(viewBtn);
+      }
+      actions.appendChild(makeCopyButton(() => m.snippet));
+      li.appendChild(actions);
       ul.appendChild(li);
     }
     details.appendChild(ul);
@@ -834,6 +1054,10 @@ el.fileInput.addEventListener('change', (e) => {
   e.target.value = '';
 });
 el.clearAllBtn.addEventListener('click', clearAll);
+
+el.viewerCloseBtn.addEventListener('click', closeViewer);
+el.viewerOverlay.addEventListener('click', closeViewer);
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeViewer(); });
 
 let debounceTimer = null;
 el.searchInput.addEventListener('input', (e) => {

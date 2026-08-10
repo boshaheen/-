@@ -35,6 +35,12 @@ export async function extractUnits(
   }
 }
 
+/** Re-renders one PDF page to a canvas, for the "view" feature. Loaded on demand like the rest. */
+export async function renderPdfPage(blob: Blob, pageIndex: number, canvas: HTMLCanvasElement, scale: number) {
+  const { renderPdfPage: run } = await import('./pdf')
+  return run(blob, pageIndex, canvas, scale)
+}
+
 export async function listZipEntries(blob: Blob, basePath: string) {
   const { listZipEntries: run } = await import('./zip')
   return run(blob, basePath)

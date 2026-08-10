@@ -1,5 +1,5 @@
-import { createWorker, type Worker } from 'tesseract.js'
-import type { TextUnit } from '../../types'
+import { createWorker, type Worker, type Page as OcrPage } from 'tesseract.js'
+import type { Span, TextUnit } from '../../types'
 
 // A single OCR worker (Arabic + English) is created lazily and reused across every image,
 // since spinning one up per file is slow and each carries its own downloaded language data.
@@ -42,15 +42,36 @@ function getWorker(): Promise<Worker> {
   return workerPromise
 }
 
+/** Rebuilds text from tesseract's line/word structure (rather than the flat `data.text`) so each
+ * word keeps its bounding box — that's what lets the "view" feature point at the exact word on
+ * the source image. Words within a line are joined with a single space, lines with a newline. */
+function buildTextWithSpans(data: OcrPage): { text: string; spans: Span[] } {
+  const lines = data.lines ?? []
+  if (!lines.length) return { text: data.text, spans: [] }
+
+  let text = ''
+  const spans: Span[] = []
+  for (const line of lines) {
+    for (const word of line.words) {
+      if (!word.text.trim()) continue
+      if (text.length && !text.endsWith('\n')) text += ' '
+      const start = text.length
+      text += word.text
+      spans.push({ start, end: start + word.text.length, x0: word.bbox.x0, y0: word.bbox.y0, x1: word.bbox.x1, y1: word.bbox.y1 })
+    }
+    text += '\n'
+  }
+  return { text: text.trimEnd(), spans }
+}
+
 export async function extractImage(blob: Blob, onProgress?: (percent: number) => void): Promise<TextUnit[]> {
   const worker = await getWorker()
   currentProgressCb = onProgress ?? null
   try {
-    const {
-      data: { text },
-    } = await withTimeout(worker.recognize(blob), 90_000, 'استغرق التعرف الضوئي على النص وقتًا طويلاً جدًا.')
+    const { data } = await withTimeout(worker.recognize(blob), 90_000, 'استغرق التعرف الضوئي على النص وقتًا طويلاً جدًا.')
     onProgress?.(100)
-    return [{ label: 'نص الصورة (OCR)', text }]
+    const { text, spans } = buildTextWithSpans(data)
+    return [{ label: 'نص الصورة (OCR)', text, spans }]
   } finally {
     currentProgressCb = null
   }

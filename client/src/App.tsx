@@ -8,6 +8,7 @@ import FileDropzone from './components/FileDropzone'
 import FileRow from './components/FileRow'
 import SearchBar from './components/SearchBar'
 import ResultsList, { type FileGroup } from './components/ResultsList'
+import PageViewer from './components/PageViewer'
 
 function newId() {
   return crypto.randomUUID()
@@ -17,6 +18,8 @@ export default function App() {
   const [files, setFiles] = useState<IndexedFile[]>([])
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
+
+  const [viewing, setViewing] = useState<SearchMatch | null>(null)
 
   const blobsRef = useRef(new Map<string, Blob>())
   const processingRef = useRef(false)
@@ -142,7 +145,10 @@ export default function App() {
           matches.push({
             fileId: file.id,
             fileName: file.name,
+            fileKind: file.kind,
             unitLabel: unit.label,
+            pageIndex: unit.pageIndex,
+            spans: unit.spans,
             start: raw.start,
             end: raw.end,
             snippet: snippet.text,
@@ -213,12 +219,30 @@ export default function App() {
           </div>
         )}
 
-        <ResultsList groups={groups} query={debouncedQuery} />
+        <ResultsList groups={groups} query={debouncedQuery} onView={setViewing} />
       </div>
 
       <footer className="mt-10 text-center text-xs text-white/30">
         يعمل بالكامل من داخل متصفحك (JavaScript + WebAssembly) — لا يتم رفع أي ملف إلى أي خادم.
       </footer>
+
+      {viewing &&
+        (() => {
+          const blob = blobsRef.current.get(viewing.fileId)
+          if (!blob) return null
+          return (
+            <PageViewer
+              fileKind={viewing.fileKind}
+              fileName={viewing.fileName}
+              blob={blob}
+              pageIndex={viewing.pageIndex}
+              spans={viewing.spans}
+              matchStart={viewing.start}
+              matchEnd={viewing.end}
+              onClose={() => setViewing(null)}
+            />
+          )
+        })()}
     </div>
   )
 }

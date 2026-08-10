@@ -1,19 +1,14 @@
 {
-  "name": "camel-rating-ai-app",
+  "name": "file-search-engine",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "workspaces": [
-    "client",
-    "server"
+    "client"
   ],
   "scripts": {
-    "dev": "concurrently -n server,client -c green,yellow \"npm run dev -w server\" \"npm run dev -w client\"",
-    "build": "npm run build -w server && npm run build -w client",
-    "typecheck": "npm run typecheck -w server && cd client && tsc -b --noEmit && cd .. && tsc --noEmit"
-  },
-  "devDependencies": {
-    "@vercel/node": "^5.9.2",
-    "concurrently": "^9.1.0"
+    "dev": "npm run dev -w client",
+    "build": "npm run build -w client",
+    "typecheck": "npm run typecheck -w client"
   }
 }

@@ -1,38 +1,38 @@
-export interface TraitDefinition {
-  key: string
-  nameAr: string
-  weight: number
+export type SupportedKind = 'pdf' | 'image' | 'docx' | 'xlsx' | 'zip'
+
+export type FileStatus = 'queued' | 'processing' | 'done' | 'error' | 'unsupported'
+
+/** One searchable unit of text extracted from a file (a PDF page, an Excel sheet, a whole doc…). */
+export interface TextUnit {
+  /** Human label shown next to matches, e.g. "صفحة 3" or "ورقة Sheet1". */
+  label: string
+  text: string
 }
 
-export const CAMEL_TRAITS: TraitDefinition[] = [
-  { key: 'head', nameAr: 'الرأس', weight: 15 },
-  { key: 'neck', nameAr: 'الرقبة', weight: 10 },
-  { key: 'ears', nameAr: 'الأذنان', weight: 10 },
-  { key: 'lips', nameAr: 'المشافر (الشفاه)', weight: 10 },
-  { key: 'hump', nameAr: 'السنام', weight: 15 },
-  { key: 'body', nameAr: 'الهيكل العام والجسم', weight: 20 },
-  { key: 'legs', nameAr: 'القوائم', weight: 10 },
-  { key: 'coat', nameAr: 'اللون وجودة الوبر', weight: 10 },
-]
-
-export interface TraitScore {
-  key: string
-  nameAr: string
-  score: number
-  weight: number
-  notes: string
-}
-
-export type Grade = 'ممتاز' | 'جيد جدًا' | 'جيد' | 'متوسط' | 'ضعيف'
-
-export interface EvaluationResult {
+export interface IndexedFile {
   id: string
-  createdAt: string
-  imageDataUrl: string
-  overallScore: number
-  grade: Grade
-  summary: string
-  traits: TraitScore[]
-  recommendations: string[]
-  camelName?: string
+  /** Display path — includes the zip entry path when the file came from an archive. */
+  name: string
+  /** Original File object, kept only for non-archive files (used to preview/download later if needed). */
+  kind: SupportedKind
+  sizeBytes: number
+  status: FileStatus
+  progress: number // 0..100
+  error?: string
+  /** Short informational note, e.g. "تم استخراج 5 ملفات من الأرشيف". */
+  note?: string
+  units: TextUnit[]
+}
+
+export interface SearchMatch {
+  fileId: string
+  fileName: string
+  unitLabel: string
+  /** Character offset of the match inside the unit's original text. */
+  start: number
+  end: number
+  /** Snippet of surrounding text, with matchStart/matchEnd relative to the snippet. */
+  snippet: string
+  matchStart: number
+  matchEnd: number
 }

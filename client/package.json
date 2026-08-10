@@ -1,21 +1,23 @@
 {
   "name": "client",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "typecheck": "tsc -b --noEmit",
     "lint": "oxlint",
     "preview": "vite preview"
   },
   "dependencies": {
-    "html-to-image": "^1.11.13",
-    "jspdf": "^4.2.1",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.11.0",
+    "pdfjs-dist": "^4.10.38",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-router-dom": "^7.18.2",
-    "recharts": "^3.10.1"
+    "tesseract.js": "^5.1.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

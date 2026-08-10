@@ -64,17 +64,26 @@ function buildTextWithSpans(data: OcrPage): { text: string; spans: Span[] } {
   return { text: text.trimEnd(), spans }
 }
 
-export async function extractImage(blob: Blob, onProgress?: (percent: number) => void): Promise<TextUnit[]> {
+async function recognize(input: Blob | HTMLCanvasElement, onProgress?: (percent: number) => void) {
   const worker = await getWorker()
   currentProgressCb = onProgress ?? null
   try {
-    const { data } = await withTimeout(worker.recognize(blob), 90_000, 'استغرق التعرف الضوئي على النص وقتًا طويلاً جدًا.')
+    const { data } = await withTimeout(worker.recognize(input), 90_000, 'استغرق التعرف الضوئي على النص وقتًا طويلاً جدًا.')
     onProgress?.(100)
-    const { text, spans } = buildTextWithSpans(data)
-    return [{ label: 'نص الصورة (OCR)', text, spans }]
+    return buildTextWithSpans(data)
   } finally {
     currentProgressCb = null
   }
+}
+
+export async function extractImage(blob: Blob, onProgress?: (percent: number) => void): Promise<TextUnit[]> {
+  const { text, spans } = await recognize(blob, onProgress)
+  return [{ label: 'نص الصورة (OCR)', text, spans }]
+}
+
+/** Runs OCR directly on an already-rendered canvas (used for scanned/image-only PDF pages). */
+export async function recognizeCanvas(canvas: HTMLCanvasElement, onProgress?: (percent: number) => void) {
+  return recognize(canvas, onProgress)
 }
 
 /** Frees the OCR worker. Call once no more images are queued (or on unmount). */

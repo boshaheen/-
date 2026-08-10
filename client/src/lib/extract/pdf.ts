@@ -1,7 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist'
 // Vite: resolve the worker script to a hashed URL at build time.
 import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url'
-import type { TextItem, TextMarkedContent } from 'pdfjs-dist/types/src/display/api'
+import type { PDFPageProxy, TextItem, TextMarkedContent } from 'pdfjs-dist/types/src/display/api'
 import type { Span, TextUnit } from '../../types'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
@@ -14,7 +14,17 @@ export async function extractPdf(blob: Blob, onProgress?: (percent: number) => v
     for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
       const page = await doc.getPage(pageNum)
       const content = await page.getTextContent()
-      const { text, spans } = joinTextItems(content.items)
+      let { text, spans } = joinTextItems(content.items)
+      // Scanned pages (a photographed/faxed document saved as PDF) have no embedded text layer at
+      // all — pdf.js correctly returns ~nothing for them. Fall back to OCR-ing a rendered image of
+      // the page, same engine used for plain image uploads, so scanned PDFs stay searchable too.
+      if (text.replace(/\s/g, '').length < 5) {
+        const pageOnProgress = onProgress
+          ? (p: number) => onProgress(Math.round(((pageNum - 1 + p / 100) / doc.numPages) * 100))
+          : undefined
+        const ocr = await ocrScannedPage(page, pageOnProgress)
+        if (ocr) ({ text, spans } = ocr)
+      }
       units.push({ label: `صفحة ${pageNum}`, text, pageIndex: pageNum, spans })
       onProgress?.(Math.round((pageNum / doc.numPages) * 100))
       page.cleanup()
@@ -23,6 +33,39 @@ export async function extractPdf(blob: Blob, onProgress?: (percent: number) => v
     await doc.destroy()
   }
   return units
+}
+
+/**
+ * Renders a page that has no text layer to a high-enough-resolution canvas and OCRs it, then maps
+ * the resulting word boxes (in canvas pixel space) back into PDF user-space via the viewport's
+ * inverse transform — so downstream code (the "view" highlighter) can treat OCR'd and real
+ * text-layer spans identically, regardless of which page they came from.
+ */
+async function ocrScannedPage(
+  page: PDFPageProxy,
+  onProgress?: (percent: number) => void,
+): Promise<{ text: string; spans: Span[] } | null> {
+  try {
+    const { recognizeCanvas } = await import('./image')
+    const base = page.getViewport({ scale: 1 })
+    const targetLongSide = 2000
+    const scale = Math.min(3, Math.max(1, targetLongSide / Math.max(base.width, base.height)))
+    const viewport = page.getViewport({ scale })
+    const canvas = document.createElement('canvas')
+    canvas.width = viewport.width
+    canvas.height = viewport.height
+    const ctx = canvas.getContext('2d')!
+    await page.render({ canvasContext: ctx, viewport }).promise
+    const { text, spans: pixelSpans } = await recognizeCanvas(canvas, onProgress)
+    const spans: Span[] = pixelSpans.map((s) => {
+      const [px0, py0] = viewport.convertToPdfPoint(s.x0, s.y0)
+      const [px1, py1] = viewport.convertToPdfPoint(s.x1, s.y1)
+      return { start: s.start, end: s.end, x0: Math.min(px0, px1), x1: Math.max(px0, px1), y0: Math.min(py0, py1), y1: Math.max(py0, py1) }
+    })
+    return { text, spans }
+  } catch {
+    return null // OCR unavailable (e.g. offline) — leave the page as "no extractable text"
+  }
 }
 
 /** Re-opens a previously-extracted PDF (from its original blob) and renders one page to a canvas. */

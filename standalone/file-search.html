@@ -443,7 +443,17 @@ async function extractPdf(blob, onProgress) {
     for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
       const page = await doc.getPage(pageNum);
       const content = await page.getTextContent();
-      const { text, spans } = joinTextItems(content.items);
+      let { text, spans } = joinTextItems(content.items);
+      // Scanned pages (a photographed/faxed document saved as PDF) have no embedded text layer at
+      // all — pdf.js correctly returns ~nothing for them. Fall back to OCR-ing a rendered image of
+      // the page, same engine used for plain image uploads, so scanned PDFs stay searchable too.
+      if (text.replace(/\s/g, '').length < 5) {
+        const pageOnProgress = onProgress
+          ? (p) => onProgress(Math.round(((pageNum - 1 + p / 100) / doc.numPages) * 100))
+          : undefined;
+        const ocr = await ocrScannedPdfPage(page, pageOnProgress);
+        if (ocr) { text = ocr.text; spans = ocr.spans; }
+      }
       units.push({ label: `صفحة ${pageNum}`, text, pageIndex: pageNum, spans });
       onProgress && onProgress(Math.round((pageNum / doc.numPages) * 100));
       page.cleanup();
@@ -537,16 +547,46 @@ function buildTextWithSpans(data) {
   }
   return { text: text.trimEnd(), spans };
 }
-async function extractImage(blob, onProgress) {
+async function recognizeInput(input, onProgress) {
   const worker = await getOcrWorker();
   ocrProgressCb = onProgress || null;
   try {
-    const { data } = await withTimeout(worker.recognize(blob), 90000, 'استغرق التعرف الضوئي على النص وقتًا طويلاً جدًا.');
+    const { data } = await withTimeout(worker.recognize(input), 90000, 'استغرق التعرف الضوئي على النص وقتًا طويلاً جدًا.');
     onProgress && onProgress(100);
-    const { text, spans } = buildTextWithSpans(data);
-    return [{ label: 'نص الصورة (OCR)', text, spans }];
+    return buildTextWithSpans(data);
   } finally {
     ocrProgressCb = null;
+  }
+}
+async function extractImage(blob, onProgress) {
+  const { text, spans } = await recognizeInput(blob, onProgress);
+  return [{ label: 'نص الصورة (OCR)', text, spans }];
+}
+/**
+ * Renders a PDF page that has no text layer to a high-enough-resolution canvas and OCRs it, then
+ * maps the resulting word boxes (canvas pixel space) back into PDF user-space via the viewport's
+ * inverse transform, so the viewer can treat OCR'd and real text-layer spans identically.
+ */
+async function ocrScannedPdfPage(page, onProgress) {
+  try {
+    const base = page.getViewport({ scale: 1 });
+    const targetLongSide = 2000;
+    const scale = Math.min(3, Math.max(1, targetLongSide / Math.max(base.width, base.height)));
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    const { text, spans: pixelSpans } = await recognizeInput(canvas, onProgress);
+    const spans = pixelSpans.map((s) => {
+      const [px0, py0] = viewport.convertToPdfPoint(s.x0, s.y0);
+      const [px1, py1] = viewport.convertToPdfPoint(s.x1, s.y1);
+      return { start: s.start, end: s.end, x0: Math.min(px0, px1), x1: Math.max(px0, px1), y0: Math.min(py0, py1), y1: Math.max(py0, py1) };
+    });
+    return { text, spans };
+  } catch {
+    return null; // OCR unavailable (e.g. offline) — leave the page as "no extractable text"
   }
 }
 async function terminateOcrWorker() {

@@ -1,0 +1,10 @@
+{
+  "name": "pdf-reader-local",
+  "private": true,
+  "version": "1.0.0",
+  "type": "commonjs",
+  "description": "قارئ PDF محلي بالكامل - بدون خادم خارجي وبدون اتصال إنترنت أثناء الاستخدام",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

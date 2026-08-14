@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>قارئ PDF المحلي</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-icon">📄</span>
+    <div>
+      <h1>قارئ PDF المحلي</h1>
+      <p class="tagline">تصفّح، ابحث، واضغط ملفاتك — كل ذلك من متصفحك فقط</p>
+    </div>
+  </div>
+  <div class="privacy-badge" title="لا يتم رفع أي ملف إلى أي خادم">
+    🔒 يعمل بالكامل محليًا — بلا إنترنت وبلا رفع ملفات
+  </div>
+</header>
+
+<main>
+
+  <section id="dropzone" class="dropzone">
+    <input type="file" id="fileInput" accept=".pdf,application/pdf" multiple hidden>
+    <div class="dropzone-inner">
+      <span class="dropzone-icon">⬆️</span>
+      <p><strong>اسحب وأفلت ملفات PDF هنا</strong> أو</p>
+      <button id="browseBtn" class="btn btn-primary" type="button">اختر ملفات من الجهاز</button>
+      <p class="hint">يمكن اختيار عدة ملفات دفعة واحدة. لا تُرسل الملفات لأي مكان — تبقى في متصفحك فقط.</p>
+    </div>
+  </section>
+
+  <section id="toolbar" class="toolbar hidden">
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="ابحث عن كلمة أو عبارة داخل محتوى الملفات المرفوعة…">
+      <button id="searchBtn" class="btn btn-secondary" type="button">🔍 بحث</button>
+      <button id="clearSearchBtn" class="btn btn-ghost" type="button">مسح البحث</button>
+    </div>
+    <div class="actions-box">
+      <button id="selectAllBtn" class="btn btn-ghost" type="button">تحديد الكل</button>
+      <button id="selectNoneBtn" class="btn btn-ghost" type="button">إلغاء التحديد</button>
+      <button id="zipBtn" class="btn btn-primary" type="button">🗜️ ضغط المحدد كـ ZIP</button>
+      <button id="clearAllBtn" class="btn btn-danger" type="button">🗑️ حذف الكل</button>
+    </div>
+  </section>
+
+  <section id="summary" class="summary hidden"></section>
+
+  <section id="searchResults" class="search-results hidden"></section>
+
+  <section id="fileListSection" class="file-list-section hidden">
+    <table class="file-table">
+      <thead>
+        <tr>
+          <th class="col-check"><input type="checkbox" id="headerCheck"></th>
+          <th>اسم الملف</th>
+          <th>الحجم</th>
+          <th>الصفحات</th>
+          <th>الحالة</th>
+          <th>إجراءات</th>
+        </tr>
+      </thead>
+      <tbody id="fileTableBody"></tbody>
+    </table>
+  </section>
+
+  <section id="emptyState" class="empty-state">
+    <p>لم تُرفع أي ملفات بعد. ابدأ برفع ملفات PDF لتصفّحها والبحث داخلها.</p>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <p>
+    مبني بتقنية <a href="https://mozilla.github.io/pdf.js/" target="_blank" rel="noopener">pdf.js</a> و
+    <a href="https://stuk.github.io/jszip/" target="_blank" rel="noopener">JSZip</a> — تعمل بالكامل داخل المتصفح، بدون خادم وبدون اتصال بالإنترنت بعد فتح الصفحة.
+  </p>
+</footer>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="vendor/jszip.min.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

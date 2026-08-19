@@ -1,5 +1,6 @@
-// يبني pdf-reader-local.html كملف HTML واحد مستقل يضمّن CSS وJS ومكتبتَي pdf.js/JSZip بالكامل،
-// بحيث يمكن فتحه مباشرة بنقرتين (file://) دون تشغيل أي خادم محلي ودون أي اتصال بالإنترنت.
+// يبني pdf-reader-local.html كملف HTML واحد مستقل يضمّن CSS وJS ومكتبات pdf.js وJSZip وTesseract.js
+// (بما فيها بيانات لغتي OCR العربية والإنجليزية) بالكامل، بحيث يمكن فتحه مباشرة بنقرتين (file://)
+// دون تشغيل أي خادم محلي ودون أي اتصال بالإنترنت.
 // شغّله بعد أي تعديل على index.html أو css/style.css أو js/app.js: node build-single-file.mjs
 
 import fs from 'fs';
@@ -12,6 +13,26 @@ const css = fs.readFileSync(path.join(ROOT, 'css/style.css'), 'utf8');
 const pdfLibRaw = fs.readFileSync(path.join(ROOT, 'vendor/pdf.min.mjs'), 'utf8');
 const pdfWorkerRaw = fs.readFileSync(path.join(ROOT, 'vendor/pdf.worker.min.mjs'), 'utf8');
 const jszipRaw = fs.readFileSync(path.join(ROOT, 'vendor/jszip.min.js'), 'utf8');
+const tesseractMinRaw = fs.readFileSync(path.join(ROOT, 'vendor/tesseract/tesseract.min.js'), 'utf8');
+let tessWorkerRaw = fs.readFileSync(path.join(ROOT, 'vendor/tesseract/worker.min.js'), 'utf8');
+
+// إصلاح خلل في Tesseract.js v5.1.1 نفسها: عند تمرير اللغات كمصفوفة كائنات {code, data} (وهو الأسلوب
+// الذي نستخدمه هنا لتضمين بيانات اللغة مباشرة بدل تحميلها عبر fetch)، تستخدم دالة initialize() الحقل
+// الخطأ (`.data` بدل `.code`) عند بناء نص اللغات المُمرَّر لمحرك Tesseract الأصلي، فيحاول تحميل لغة
+// اسمها "بايتات البيانات نفسها" بدل "ara"/"eng" ويفشل التهيئة بالكامل. نرقّع هذا هنا في نسخة worker.min.js
+// المضمَّنة فقط (نسخة الخادم لا تتأثر لأنها تُمرِّر اللغات كنص عادي "ara+eng" لا كمصفوفة كائنات).
+{
+  const buggy = 'return"string"==typeof t?t:t.data}';
+  const fixed = 'return"string"==typeof t?t:t.code}';
+  const occurrences = tessWorkerRaw.split(buggy).length - 1;
+  if (occurrences !== 1) {
+    throw new Error(`نمط الرقعة الخاصة بخلل initialize() في worker.min.js غير موجود بالشكل المتوقع (${occurrences} تطابق بدل 1) — قد يكون إصدار tesseract.js قد تغيّر، راجع الرقعة يدويًا`);
+  }
+  tessWorkerRaw = tessWorkerRaw.replace(buggy, fixed);
+}
+const tessCoreRaw = fs.readFileSync(path.join(ROOT, 'vendor/tesseract/tesseract-core-simd-lstm.wasm.js'), 'utf8');
+const engTrainedDataB64 = fs.readFileSync(path.join(ROOT, 'vendor/tessdata/eng.traineddata')).toString('base64');
+const araTrainedDataB64 = fs.readFileSync(path.join(ROOT, 'vendor/tessdata/ara.traineddata')).toString('base64');
 let appJs = fs.readFileSync(path.join(ROOT, 'js/app.js'), 'utf8');
 
 // 1) تحويل مكتبة pdf.js من عبارة ES module التصديرية (export{local as Exported,...};)
@@ -50,6 +71,61 @@ appJs = appJs.replace(
 
 if (appJs.includes('import * as pdfjsLib')) throw new Error('فشل إزالة سطر import من app.js');
 if (appJs.includes('import.meta.url')) throw new Error('فشل استبدال سطر workerSrc في app.js');
+
+// 3) استبدال مسارات OCR النسبية (vendor/tesseract/..., vendor/tessdata) بمصادر مضمَّنة داخل الملف.
+//
+//    ملاحظة مهمة حول العامل (Worker): يعتمد Tesseract.js داخليًا على تحميل عاملَين متداخلَين عبر
+//    Blob (يُنشئ Blob يستدعي importScripts على Blob آخر)، وهذا النمط المتداخل من Blob-داخل-Blob
+//    يفشل تحديدًا تحت file:// (حِزم Blob تصبح ذات "أصل فارغ/null" هناك ولا يمكن الوصول إليها من
+//    عامل آخر مُحمَّل هو نفسه عبر Blob). لتفادي ذلك:
+//      - نُعطّل التفاف Tesseract.js الخاص بالعامل (workerBlobURL:false) بحيث يُنشئ Worker مباشرة من
+//        الرابط الممرَّر (قفزة Blob واحدة فقط، وهو النمط المُثبَت عمله بالفعل مع عامل pdf.js أعلاه).
+//      - نُدمج نص محرك tesseract.js-core قبل نص worker.min.js في Blob واحد فقط، بحيث يكون
+//        `TesseractCore` معرَّفًا مسبقًا (متغيّر عام بسيط) قبل أن يتحقق worker.min.js من وجوده،
+//        فيتخطى استدعاء importScripts للمحرك تمامًا بدل تحميله ديناميكيًا (لا حاجة إذًا لـ OCR_CORE_PATH).
+//    - بيانات اللغة (ara/eng) تُمرَّر مباشرة كـ Uint8Array بدل تحميلها عبر fetch (يُحجب على file://)،
+//      عبر الصيغة {code, data} التي يدعمها Tesseract.createWorker خصّيصًا لمثل هذه الحالة.
+const ocrPathsBlockOld = `const OCR_CORE_PATH = 'vendor/tesseract/tesseract-core-simd-lstm.wasm.js';
+const OCR_WORKER_PATH = 'vendor/tesseract/worker.min.js';
+const OCR_LANG_PATH = 'vendor/tessdata';
+// يستخدم Tesseract.js داخليًا Blob لتشغيل عامل الـ OCR ثم importScripts لتحميل workerPath منه؛
+// هذا يعمل بشكل طبيعي عبر خادم محلي (http). أما في نسخة الملف الواحد (file://) فإن المتصفح يمنع
+// تحميل Blob من داخل Blob آخر متداخل، لذلك يُعطَّل هذا الخيار هناك ويُدمَج المحرك مسبقًا داخل نص
+// العامل نفسه بدل استيراده ديناميكيًا (انظر build-single-file.mjs).
+const OCR_WORKER_BLOB_URL = true;
+// عند التضمين داخل ملف واحد تصبح هذه خريطة {code: Uint8Array} بدل null،
+// فيُستغنى عن langPath تمامًا وتُمرَّر بيانات اللغة مباشرة.
+const OCR_EMBEDDED_LANG_DATA = null;`;
+
+const ocrPathsBlockNew = `const OCR_CORE_PATH = ''; // غير مستخدم: المحرك مُدمَج مسبقًا داخل نص العامل نفسه أدناه
+const OCR_WORKER_PATH = URL.createObjectURL(new Blob(
+  [
+    document.getElementById('tess-core-source').textContent,
+    ';\\n',
+    document.getElementById('tess-worker-source').textContent,
+  ],
+  { type: 'text/javascript' },
+));
+const OCR_WORKER_BLOB_URL = false; // إنشاء العامل مباشرة من الرابط أعلاه دون التفاف Blob إضافي متداخل
+const OCR_LANG_PATH = '';
+let __ocrLangDataCache = null;
+function OCR_EMBEDDED_LANG_DATA() {
+  if (__ocrLangDataCache) return __ocrLangDataCache;
+  const b64ToBytes = (b64) => {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  };
+  __ocrLangDataCache = {
+    eng: b64ToBytes(document.getElementById('tess-lang-eng').textContent),
+    ara: b64ToBytes(document.getElementById('tess-lang-ara').textContent),
+  };
+  return __ocrLangDataCache;
+}`;
+
+if (!appJs.includes(ocrPathsBlockOld)) throw new Error('لم يتم العثور على قسم مسارات OCR المتوقع في app.js — تحقق من التزامن مع build-single-file.mjs');
+appJs = appJs.replace(ocrPathsBlockOld, ocrPathsBlockNew);
 
 const html = `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -103,6 +179,17 @@ ${css}
     </div>
   </section>
 
+  <section id="ocrBar" class="ocr-bar hidden">
+    <label for="ocrLangSelect">🔎 لغة النص في الصور الممسوحة ضوئيًا:</label>
+    <select id="ocrLangSelect">
+      <option value="ara+eng" selected>عربي + إنجليزي</option>
+      <option value="ara">عربي فقط</option>
+      <option value="eng">إنجليزي فقط</option>
+    </select>
+    <button id="ocrAllBtn" class="btn btn-secondary" type="button">تشغيل OCR على كل الملفات المصنّفة كصور</button>
+    <span class="ocr-hint">التعرف الضوئي يعمل بالكامل داخل المتصفح وقد يستغرق بضع ثوانٍ لكل صفحة، وقد يحتوي أخطاء بسيطة خصوصًا في الصور منخفضة الجودة.</span>
+  </section>
+
   <section id="summary" class="summary hidden"></section>
 
   <section id="searchResults" class="search-results hidden"></section>
@@ -132,7 +219,9 @@ ${css}
 <footer class="footer">
   <p>
     مبني بتقنية <a href="https://mozilla.github.io/pdf.js/" target="_blank" rel="noopener">pdf.js</a> و
-    <a href="https://stuk.github.io/jszip/" target="_blank" rel="noopener">JSZip</a> (مضمّنتان داخل هذا الملف بالكامل) — تعمل بلا خادم وبلا اتصال إنترنت.
+    <a href="https://stuk.github.io/jszip/" target="_blank" rel="noopener">JSZip</a> و
+    <a href="https://tesseract.projectnaptha.com/" target="_blank" rel="noopener">Tesseract.js</a>
+    (جميعها مضمّنة داخل هذا الملف بالكامل، بما فيها بيانات لغتَي OCR العربية والإنجليزية) — يعمل بلا خادم وبلا اتصال إنترنت.
   </p>
 </footer>
 
@@ -141,9 +230,22 @@ ${css}
 <!-- كود عامل pdf.js الأصلي مضمَّن كنص خام هنا (لا يُنفَّذ)، ويُحوَّل إلى Worker عبر Blob عند الحاجة -->
 <script id="pdf-worker-source" type="text/plain">${pdfWorkerRaw}</script>
 
+<!-- كود worker ومحرّك Tesseract.js الأصليان مضمَّنان كنص خام (لا يُنفَّذان مباشرة)، ويُحوَّلان إلى Blob عند الحاجة -->
+<script id="tess-worker-source" type="text/plain">${tessWorkerRaw}</script>
+<script id="tess-core-source" type="text/plain">${tessCoreRaw}</script>
+
+<!-- بيانات لغتَي OCR (Tesseract traineddata) بترميز base64 -->
+<script id="tess-lang-eng" type="text/plain">${engTrainedDataB64}</script>
+<script id="tess-lang-ara" type="text/plain">${araTrainedDataB64}</script>
+
 <!-- مكتبة JSZip (نسخة محلية مضمَّنة بالكامل) -->
 <script>
 ${jszipRaw}
+</script>
+
+<!-- مكتبة Tesseract.js (نسخة محلية مضمَّنة بالكامل) -->
+<script>
+${tesseractMinRaw}
 </script>
 
 <!-- مكتبة pdf.js (نسخة محلية مضمَّنة بالكامل، مُحوَّلة من ES module إلى window.pdfjsLib) ثم منطق التطبيق -->

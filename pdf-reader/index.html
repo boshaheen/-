@@ -48,6 +48,17 @@
     </div>
   </section>
 
+  <section id="ocrBar" class="ocr-bar hidden">
+    <label for="ocrLangSelect">🔎 لغة النص في الصور الممسوحة ضوئيًا:</label>
+    <select id="ocrLangSelect">
+      <option value="ara+eng" selected>عربي + إنجليزي</option>
+      <option value="ara">عربي فقط</option>
+      <option value="eng">إنجليزي فقط</option>
+    </select>
+    <button id="ocrAllBtn" class="btn btn-secondary" type="button">تشغيل OCR على كل الملفات المصنّفة كصور</button>
+    <span class="ocr-hint">التعرف الضوئي يعمل بالكامل داخل المتصفح وقد يستغرق بضع ثوانٍ لكل صفحة، وقد يحتوي أخطاء بسيطة خصوصًا في الصور منخفضة الجودة.</span>
+  </section>
+
   <section id="summary" class="summary hidden"></section>
 
   <section id="searchResults" class="search-results hidden"></section>
@@ -84,6 +95,7 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="vendor/jszip.min.js"></script>
+<script src="vendor/tesseract/tesseract.min.js"></script>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>

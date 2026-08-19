@@ -37,6 +37,10 @@ const selectNoneBtn = document.getElementById('selectNoneBtn');
 const zipBtn = document.getElementById('zipBtn');
 const clearAllBtn = document.getElementById('clearAllBtn');
 
+const ocrBar = document.getElementById('ocrBar');
+const ocrLangSelect = document.getElementById('ocrLangSelect');
+const ocrAllBtn = document.getElementById('ocrAllBtn');
+
 const toast = document.getElementById('toast');
 
 // ---------- أدوات مساعدة ----------
@@ -88,7 +92,7 @@ class FileRecord {
     this.file = file;
     this.name = file.name;
     this.size = file.size;
-    this.status = 'loading'; // loading | ok | image | invalid | error
+    this.status = 'loading'; // loading | ok | image | invalid | error | ocr-running | ocr
     this.statusLabel = 'جارٍ التحليل…';
     this.numPages = null;
     /** نص كل صفحة على حدة، مطبّع مسبقًا لتسريع البحث */
@@ -160,11 +164,146 @@ async function processFile(rec) {
   render();
 }
 
+// ---------- التعرف الضوئي (OCR) للصور الممسوحة ضوئيًا ----------
+// كل هذا يعمل داخل المتصفح عبر Tesseract.js دون أي اتصال بالإنترنت.
+// في نسخة الملف الواحد المبنية (pdf-reader-local.html) يستبدل build-single-file.mjs
+// القسم التالي بمعطيات مضمّنة داخل الملف نفسه بدلًا من مسارات vendor/ النسبية.
+
+// مسارات ملفات محرك Tesseract.js المحلية (نسبةً إلى صفحة index.html)
+const OCR_CORE_PATH = 'vendor/tesseract/tesseract-core-simd-lstm.wasm.js';
+const OCR_WORKER_PATH = 'vendor/tesseract/worker.min.js';
+const OCR_LANG_PATH = 'vendor/tessdata';
+// يستخدم Tesseract.js داخليًا Blob لتشغيل عامل الـ OCR ثم importScripts لتحميل workerPath منه؛
+// هذا يعمل بشكل طبيعي عبر خادم محلي (http). أما في نسخة الملف الواحد (file://) فإن المتصفح يمنع
+// تحميل Blob من داخل Blob آخر متداخل، لذلك يُعطَّل هذا الخيار هناك ويُدمَج المحرك مسبقًا داخل نص
+// العامل نفسه بدل استيراده ديناميكيًا (انظر build-single-file.mjs).
+const OCR_WORKER_BLOB_URL = true;
+// عند التضمين داخل ملف واحد تصبح هذه خريطة {code: Uint8Array} بدل null،
+// فيُستغنى عن langPath تمامًا وتُمرَّر بيانات اللغة مباشرة.
+const OCR_EMBEDDED_LANG_DATA = null;
+
+const OCR_STAGE_LABELS = {
+  'loading tesseract core': 'تحميل محرّك OCR',
+  'initializing tesseract': 'تهيئة المحرّك',
+  'loading language traineddata': 'تحميل بيانات اللغة',
+  'initializing api': 'تهيئة واجهة البرمجة',
+  'recognizing text': 'تحليل النص',
+};
+
+let ocrWorker = null;
+let ocrWorkerLangsKey = null;
+let ocrContext = null; // { rec, pageIndex, totalPages }
+
+function resolveOcrLangs(langsKey) {
+  if (!OCR_EMBEDDED_LANG_DATA) return langsKey; // نص عادي مثل "ara+eng" يُحمَّل عبر langPath
+  // في نسخة الملف الواحد تصبح OCR_EMBEDDED_LANG_DATA دالة تُرجع الخريطة (فك ترميز base64 كسول عند أول استخدام)
+  const dataMap = typeof OCR_EMBEDDED_LANG_DATA === 'function' ? OCR_EMBEDDED_LANG_DATA() : OCR_EMBEDDED_LANG_DATA;
+  return langsKey.split('+').map((code) => ({ code, data: dataMap[code] }));
+}
+
+async function getOcrWorker(langsKey) {
+  if (ocrWorker && ocrWorkerLangsKey === langsKey) return ocrWorker;
+  if (ocrWorker) {
+    try { await ocrWorker.terminate(); } catch { /* تجاهل */ }
+    ocrWorker = null;
+  }
+  ocrWorker = await Tesseract.createWorker(resolveOcrLangs(langsKey), 1, {
+    corePath: OCR_CORE_PATH,
+    workerPath: OCR_WORKER_PATH,
+    workerBlobURL: OCR_WORKER_BLOB_URL,
+    langPath: OCR_LANG_PATH,
+    gzip: false,
+    logger: (m) => {
+      if (!ocrContext) return;
+      const { rec, pageIndex, totalPages } = ocrContext;
+      const stage = OCR_STAGE_LABELS[m.status] || m.status;
+      const pct = Math.round((m.progress || 0) * 100);
+      rec.statusLabel = `🔎 ${stage} — صفحة ${pageIndex} من ${totalPages} (${pct}%)`;
+      render();
+    },
+  });
+  ocrWorkerLangsKey = langsKey;
+  return ocrWorker;
+}
+
+async function ocrFile(rec) {
+  if (typeof Tesseract === 'undefined') {
+    showToast('تعذّر تحميل محرك التعرف الضوئي (OCR)');
+    return;
+  }
+  if (rec.status === 'ocr-running') return;
+
+  const langsKey = ocrLangSelect.value;
+  rec.status = 'ocr-running';
+  rec.statusLabel = '🔎 جارٍ التحضير…';
+  render();
+
+  try {
+    const worker = await getOcrWorker(langsKey);
+    const arrayBuffer = await rec.file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const totalPages = pdf.numPages;
+    let totalChars = 0;
+
+    for (let i = 1; i <= totalPages; i++) {
+      ocrContext = { rec, pageIndex: i, totalPages };
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 2.5 });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      const ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      const { data } = await worker.recognize(canvas);
+      const raw = (data.text || '').replace(/\s+/g, ' ').trim();
+      rec.pagesRawText[i - 1] = raw;
+      rec.pagesText[i - 1] = normalizeText(raw);
+      totalChars += raw.length;
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+    ocrContext = null;
+
+    const avg = totalChars / totalPages;
+    if (avg >= MIN_CHARS_PER_PAGE) {
+      rec.status = 'ocr';
+      rec.statusLabel = '🔎 نص مستخرج بالتعرف الضوئي (قد يحتوي أخطاء)';
+    } else {
+      rec.status = 'image';
+      rec.statusLabel = '⚠️ لم يُعثر على نص حتى بعد التعرف الضوئي';
+    }
+  } catch (err) {
+    console.error('فشل تشغيل OCR على الملف', rec.name, err);
+    ocrContext = null;
+    rec.status = 'image';
+    rec.statusLabel = '❌ فشل تشغيل التعرف الضوئي على هذا الملف';
+  }
+  render();
+}
+
+async function ocrAllImages() {
+  const targets = [...files.values()].filter((r) => r.status === 'image');
+  if (targets.length === 0) {
+    showToast('لا توجد ملفات مصنّفة كصور تحتاج تعرّفًا ضوئيًا');
+    return;
+  }
+  ocrAllBtn.disabled = true;
+  const originalLabel = ocrAllBtn.textContent;
+  for (const rec of targets) {
+    ocrAllBtn.textContent = `⏳ جارٍ معالجة ${rec.name}…`;
+    await ocrFile(rec);
+  }
+  ocrAllBtn.disabled = false;
+  ocrAllBtn.textContent = originalLabel;
+  showToast('انتهى تشغيل التعرف الضوئي على الملفات المصنّفة كصور');
+}
+
 // ---------- العرض ----------
 
 function toggleSections() {
   const hasFiles = files.size > 0;
   toolbar.classList.toggle('hidden', !hasFiles);
+  ocrBar.classList.toggle('hidden', !hasFiles);
   summary.classList.toggle('hidden', !hasFiles);
   fileListSection.classList.toggle('hidden', !hasFiles);
   emptyState.classList.toggle('hidden', hasFiles);
@@ -184,7 +323,12 @@ function render() {
     const statusClass = {
       loading: 'status-loading', ok: 'status-ok', image: 'status-image',
       invalid: 'status-invalid', error: 'status-invalid',
+      'ocr-running': 'status-ocr-running', ocr: 'status-ocr',
     }[rec.status];
+
+    const ocrBtnHtml = rec.status === 'image'
+      ? `<button class="btn btn-ghost btn-sm ocr-btn" data-id="${rec.id}">🔎 OCR</button>`
+      : '';
 
     tr.innerHTML = `
       <td><input type="checkbox" class="row-check" data-id="${rec.id}" ${rec.selected ? 'checked' : ''}></td>
@@ -194,6 +338,7 @@ function render() {
       <td><span class="status-badge ${statusClass}">${rec.statusLabel}</span></td>
       <td class="row-actions">
         <button class="btn btn-ghost btn-sm view-btn" data-id="${rec.id}" ${rec.status === 'invalid' || rec.status === 'error' ? 'disabled' : ''}>👁️ فتح</button>
+        ${ocrBtnHtml}
         <button class="btn btn-danger btn-sm remove-btn" data-id="${rec.id}">حذف</button>
       </td>
     `;
@@ -214,8 +359,9 @@ function runSearch() {
   }
   const normQuery = normalizeText(query);
   const list = [...files.values()];
-  const searchable = list.filter((r) => r.status === 'ok');
-  const excluded = list.filter((r) => r.status === 'image' || r.status === 'invalid' || r.status === 'error');
+  const searchable = list.filter((r) => r.status === 'ok' || r.status === 'ocr');
+  const excluded = list.filter((r) => r.status === 'image' || r.status === 'invalid' || r.status === 'error' || r.status === 'ocr-running');
+  const ocrCandidates = list.filter((r) => r.status === 'image');
 
   const groups = [];
   for (const rec of searchable) {
@@ -236,7 +382,8 @@ function runSearch() {
     html += `<p class="no-results">لا توجد نتائج مطابقة في الملفات القابلة للبحث.</p>`;
   } else {
     for (const { rec, hits } of groups) {
-      html += `<div class="result-group"><h3>📄 ${escapeHtml(rec.name)} (${hits.length} نتيجة)</h3>`;
+      const ocrTag = rec.status === 'ocr' ? '<span class="result-ocr-tag">🔎 عبر OCR</span> ' : '';
+      html += `<div class="result-group"><h3>📄 ${ocrTag}${escapeHtml(rec.name)} (${hits.length} نتيجة)</h3>`;
       for (const hit of hits) {
         html += `<div class="result-item" data-id="${rec.id}" data-page="${hit.page}">
           ${hit.snippet}<span class="result-page">صفحة ${hit.page}</span>
@@ -248,6 +395,9 @@ function runSearch() {
 
   if (excluded.length) {
     html += `<p class="excluded-note">ملاحظة: ${excluded.length} ملف مستبعَد من البحث لأنه صورة ممسوحة ضوئيًا أو غير صالح: ${excluded.map((r) => escapeHtml(r.name)).join('، ')}</p>`;
+  }
+  if (ocrCandidates.length) {
+    html += `<p class="excluded-note">💡 يمكنك تشغيل "التعرف الضوئي (OCR)" على هذه الملفات من القائمة أدناه لجعلها قابلة للبحث.</p>`;
   }
 
   searchResultsEl.innerHTML = html;
@@ -365,6 +515,9 @@ fileTableBody.addEventListener('click', (e) => {
   if (target.matches('.view-btn')) {
     const rec = files.get(target.dataset.id);
     if (rec) openFile(rec);
+  } else if (target.matches('.ocr-btn')) {
+    const rec = files.get(target.dataset.id);
+    if (rec) ocrFile(rec);
   } else if (target.matches('.remove-btn')) {
     const rec = files.get(target.dataset.id);
     if (rec?.objectUrl) URL.revokeObjectURL(rec.objectUrl);
@@ -396,6 +549,7 @@ selectNoneBtn.addEventListener('click', () => {
 });
 
 zipBtn.addEventListener('click', zipSelected);
+ocrAllBtn.addEventListener('click', ocrAllImages);
 
 clearAllBtn.addEventListener('click', () => {
   if (files.size === 0) return;

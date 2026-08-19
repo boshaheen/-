@@ -5,6 +5,7 @@
   "type": "commonjs",
   "description": "قارئ PDF محلي بالكامل - بدون خادم خارجي وبدون اتصال إنترنت أثناء الاستخدام",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build:single": "node build-single-file.mjs"
   }
 }
